@@ -230,36 +230,35 @@ class Configurator(QMainWindow):
 
         left.addWidget(self._group("Blessing Selection", [
             self._bool_row("ChaosMode", "Chaos Mode"),
-            self._label_row("Bypass all blessing prerequisites —\nevery blessing can appear at any banner"),
         ]))
 
         left.addStretch()
 
-        # ── Center column (Biome Repeat — will be extended) ───────
-        center.addWidget(self._group("Biome Repeat", [
-            self._bool_row("EnableBiomeRepeat", "Enable Biome Repeat"),
-            self._combo_row("RepeatBiome", "Repeat Biome", BIOMES),
-            self._combo_row("RepeatAfterBiome", "Repeat After", BIOMES),
-        ]))
-
-        center.addStretch()
-
-        # ── Right column ─────────────────────────────────────────
-        right.addWidget(self._group("Beast Rooms", [
+        # ── Center column ─────────────────────────────────────────
+        center.addWidget(self._group("Beast Rooms", [
             self._pct_row("BeastChancePercent", "Random Chance", 0, 100),
             self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15),
             self._int_row("BeastRoom1", "Fixed Beast Room 1", -1, MAX_FIXED_ROOM),
             self._int_row("BeastRoom2", "Fixed Beast Room 2", -1, MAX_FIXED_ROOM),
         ]))
 
-        right.addWidget(self._group("Health Multipliers", [
+        center.addWidget(self._group("Health Multipliers", [
             self._float_row("BossHealthMultiplier", "Boss Health", 0.1, 50.0, "x"),
             self._float_row("BeastHealthMultiplier", "Beast Health", 0.1, 50.0, "x"),
         ]))
 
-        right.addWidget(self._group("Intensity", [
+        center.addWidget(self._group("Intensity", [
             self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
-            self._label_row("Scales enemy spawn density and difficulty.\n1.0 = normal, 2.0 = double spawns."),
+            self._label_row("Scales enemy spawn count per room.\nDoes NOT affect enemy health or damage."),
+        ]))
+
+        center.addStretch()
+
+        # ── Right column (Biome Repeat — will be extended) ────────
+        right.addWidget(self._group("Biome Repeat", [
+            self._bool_row("EnableBiomeRepeat", "Enable Biome Repeat"),
+            self._combo_row("RepeatBiome", "Repeat Biome", BIOMES),
+            self._combo_row("RepeatAfterBiome", "Repeat After", BIOMES),
         ]))
 
         right.addStretch()
