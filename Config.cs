@@ -44,9 +44,6 @@ namespace SwornTweaks
         // Intensity
         internal static MelonPreferences_Entry<float> IntensityMultiplier = null!;
 
-        // Player scaling
-        internal static MelonPreferences_Entry<float> PlayerHealthMultiplier = null!;
-
         // Enemy scaling (normal enemies only)
         internal static MelonPreferences_Entry<float> EnemyHealthMultiplier = null!;
         internal static MelonPreferences_Entry<float> EnemyDamageMultiplier = null!;
@@ -81,7 +78,7 @@ namespace SwornTweaks
             DuoChance = _cat.CreateEntry("DuoChance", 0.35f,
                 "Duo blessing chance (0.35 = 35%)");
 
-            ExtraBiomes = _cat.CreateEntry("ExtraBiomes", 1,
+            ExtraBiomes = _cat.CreateEntry("ExtraBiomes", 0,
                 "Number of extra combat biomes to add (0-3, inserted after DeepHarbor)");
             RandomizeRepeats = _cat.CreateEntry("RandomizeRepeats", false,
                 "Randomize which biomes are used for extra slots");
@@ -107,9 +104,6 @@ namespace SwornTweaks
 
             IntensityMultiplier = _cat.CreateEntry("IntensityMultiplier", 1.0f,
                 "Global room intensity multiplier (1.0 = no change, higher = harder spawns)");
-
-            PlayerHealthMultiplier = _cat.CreateEntry("PlayerHealthMultiplier", 1.0f,
-                "Health multiplier for the player character (1.0 = no change)");
 
             EnemyHealthMultiplier = _cat.CreateEntry("EnemyHealthMultiplier", 1.0f,
                 "Health multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");

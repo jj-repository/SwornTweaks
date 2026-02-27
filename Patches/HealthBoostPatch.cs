@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HarmonyLib;
 using Il2Cpp;
 using MelonLoader;
@@ -7,8 +8,15 @@ namespace SwornTweaks.Patches
     [HarmonyPatch(typeof(Mob), nameof(Mob.SetMobDifficultyScaling))]
     static class HealthBoostPatch
     {
+        // Track which mobs we've already modified to prevent stacking
+        // if SetMobDifficultyScaling is called more than once per mob
+        internal static readonly HashSet<int> _modified = new();
+
         static void Postfix(Mob __instance)
         {
+            int id = __instance.GetInstanceID();
+            if (!_modified.Add(id)) return;
+
             var health = __instance.HealthStats?.HealthMultiplier;
 
             if (__instance.IsBoss)
@@ -36,6 +44,16 @@ namespace SwornTweaks.Patches
                 if (dmg != 1.0f)
                     __instance.CombatStats?.AttackMultiplier?.AddMod(dmg);
             }
+        }
+    }
+
+    // Clear tracked mobs at run start to prevent memory leak
+    [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ResetBiomeRunData))]
+    static class HealthBoostReset
+    {
+        static void Prefix()
+        {
+            HealthBoostPatch._modified.Clear();
         }
     }
 }

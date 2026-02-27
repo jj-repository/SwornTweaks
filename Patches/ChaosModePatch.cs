@@ -13,32 +13,34 @@ namespace SwornTweaks.Patches
         private static bool BypassIsValid(ref bool __result)
         {
             if (!Config.ChaosMode.Value) return true;
-            __result = true;
-            return false; // skip original
+            // TEMP DISABLED for crash isolation — always run original
+            // __result = true;
+            // return false;
+            return true;
         }
 
-        [HarmonyPatch(typeof(Blessing), nameof(Blessing.IsValid))]
+        //[HarmonyPatch(typeof(Blessing), nameof(Blessing.IsValid))]
         static class Base { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(ParagonBlessing), nameof(ParagonBlessing.IsValid))]
+        //[HarmonyPatch(typeof(ParagonBlessing), nameof(ParagonBlessing.IsValid))]
         static class Paragon { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(CharacterBlessing), nameof(CharacterBlessing.IsValid))]
+        //[HarmonyPatch(typeof(CharacterBlessing), nameof(CharacterBlessing.IsValid))]
         static class Character { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(EventBlessing), nameof(EventBlessing.IsValid))]
+        //[HarmonyPatch(typeof(EventBlessing), nameof(EventBlessing.IsValid))]
         static class Event { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(WeaponBlessing), nameof(WeaponBlessing.IsValid))]
+        //[HarmonyPatch(typeof(WeaponBlessing), nameof(WeaponBlessing.IsValid))]
         static class Weapon { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(DuoBlessing), nameof(DuoBlessing.IsValid))]
+        //[HarmonyPatch(typeof(DuoBlessing), nameof(DuoBlessing.IsValid))]
         static class Duo { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(KissCurseBlessing), nameof(KissCurseBlessing.IsValid))]
+        //[HarmonyPatch(typeof(KissCurseBlessing), nameof(KissCurseBlessing.IsValid))]
         static class KissCurse { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
 
-        [HarmonyPatch(typeof(RoundTableBlessing), nameof(RoundTableBlessing.IsValid))]
+        //[HarmonyPatch(typeof(RoundTableBlessing), nameof(RoundTableBlessing.IsValid))]
         static class RoundTable { static bool Prefix(ref bool __result) => BypassIsValid(ref __result); }
     }
 }

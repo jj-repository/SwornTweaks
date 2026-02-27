@@ -50,7 +50,6 @@ VANILLA_DEFAULTS = {
     "BossHealthMultiplier": 1.0,
     "BeastHealthMultiplier": 1.0,
     "IntensityMultiplier": 1.0,
-    "PlayerHealthMultiplier": 1.0,
     "EnemyHealthMultiplier": 1.0,
     "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
@@ -213,10 +212,6 @@ class Configurator(QMainWindow):
         left.addWidget(self._group("Toggles", [
             self._bool_row("NoGemCost", "No Gem Cost"),
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
-        ]))
-
-        left.addWidget(self._group("Player", [
-            self._float_row("PlayerHealthMultiplier", "Health Multiplier", 0.1, 50.0, "x"),
         ]))
 
         left.addWidget(self._group("Blessing Selection", [
@@ -447,8 +442,14 @@ class Configurator(QMainWindow):
     def _load_from_cfg(self, path: Path | None):
         """Load values from a cfg file. Falls back to vanilla defaults for missing keys."""
         cfg = ConfigParser()
+        cfg.optionxform = str  # preserve PascalCase keys for MelonPreferences
         if path and path.exists():
-            cfg.read(str(path))
+            # MelonPreferences.cfg may have stray lines before section headers
+            # (e.g. old mod entries). Skip lines before the first [Section].
+            from io import StringIO
+            lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            first_section = next((i for i, l in enumerate(lines) if l.strip().startswith("[")), 0)
+            cfg.read_file(StringIO("".join(lines[first_section:])))
         for key, widget in self.widgets.items():
             default = VANILLA_DEFAULTS[key]
             raw = cfg.get(SECTION, key, fallback=None)
@@ -467,8 +468,15 @@ class Configurator(QMainWindow):
             QMessageBox.warning(self, "Error", "No game path set. Cannot save.")
             return
         cfg = ConfigParser()
+        cfg.optionxform = str  # preserve PascalCase keys for MelonPreferences
+        # Preserve any lines before the first section header (e.g. old mod entries)
+        preamble = ""
         if self.cfg_path.exists():
-            cfg.read(str(self.cfg_path))
+            from io import StringIO
+            lines = self.cfg_path.read_text(encoding="utf-8").splitlines(keepends=True)
+            first_section = next((i for i, l in enumerate(lines) if l.strip().startswith("[")), 0)
+            preamble = "".join(lines[:first_section])
+            cfg.read_file(StringIO("".join(lines[first_section:])))
         if not cfg.has_section(SECTION):
             cfg.add_section(SECTION)
         for key, widget in self.widgets.items():
@@ -482,6 +490,8 @@ class Configurator(QMainWindow):
 
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cfg_path, "w") as f:
+            if preamble:
+                f.write(preamble)
             cfg.write(f)
 
         QMessageBox.information(self, "Saved", f"Config saved to:\n{self.cfg_path}")
@@ -507,6 +517,7 @@ class Configurator(QMainWindow):
             return
         p = Path(path)
         cfg = ConfigParser()
+        cfg.optionxform = str  # preserve PascalCase keys for MelonPreferences
         try:
             cfg.read(str(p))
         except Exception as e:

@@ -10,6 +10,9 @@ namespace SwornTweaks.Patches
     {
         private static readonly Random _rng = new();
 
+        // Prefix: modify biomes list BEFORE ResetBiomeRunData allocates
+        // m_biomeRunDatas array, so the array is sized correctly.
+        // (Previous crashes were caused by ChaosModePatch, not this.)
         static void Prefix(ExpeditionManager __instance)
         {
             int extra = Config.ExtraBiomes.Value;

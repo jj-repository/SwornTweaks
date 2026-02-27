@@ -21,7 +21,6 @@ namespace SwornTweaks
             LoggerInstance.Msg($"  VanillaBeast: {Config.UseVanillaBeastSettings.Value}, BeastChance: {Config.BeastChancePercent.Value}% (max {Config.MaxBeastsPerBiome.Value}/biome), Fixed: [{Config.BeastRoom1.Value}, {Config.BeastRoom2.Value}]");
             LoggerInstance.Msg($"  BossHP: {Config.BossHealthMultiplier.Value}x, BeastHP: {Config.BeastHealthMultiplier.Value}x");
             LoggerInstance.Msg($"  Intensity: {Config.IntensityMultiplier.Value}x");
-            LoggerInstance.Msg($"  PlayerHP: {Config.PlayerHealthMultiplier.Value}x");
             LoggerInstance.Msg($"  EnemyHP: {Config.EnemyHealthMultiplier.Value}x, EnemyDMG: {Config.EnemyDamageMultiplier.Value}x");
             LoggerInstance.Msg($"  ChaosMode: {Config.ChaosMode.Value}");
         }
