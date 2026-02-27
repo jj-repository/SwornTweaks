@@ -25,10 +25,10 @@ namespace SwornTweaks
         // Duo blessings
         internal static MelonPreferences_Entry<float> DuoChance = null!;
 
-        // Biome repeat
-        internal static MelonPreferences_Entry<bool> EnableBiomeRepeat = null!;
-        internal static MelonPreferences_Entry<string> RepeatBiome = null!;
-        internal static MelonPreferences_Entry<string> RepeatAfterBiome = null!;
+        // Run length / biome sequence
+        internal static MelonPreferences_Entry<int> ExtraBiomes = null!;
+        internal static MelonPreferences_Entry<bool> RandomizeRepeats = null!;
+        internal static MelonPreferences_Entry<bool> AllBiomesRandom = null!;
 
         // Beast rooms
         internal static MelonPreferences_Entry<float> BeastChancePercent = null!;
@@ -80,12 +80,12 @@ namespace SwornTweaks
             DuoChance = _cat.CreateEntry("DuoChance", 0.35f,
                 "Duo blessing chance (0.35 = 35%)");
 
-            EnableBiomeRepeat = _cat.CreateEntry("EnableBiomeRepeat", true,
-                "Insert a repeated biome into the expedition sequence");
-            RepeatBiome = _cat.CreateEntry("RepeatBiome", "Kingswood",
-                "Which biome to repeat (Kingswood, Cornucopia, DeepHarbor)");
-            RepeatAfterBiome = _cat.CreateEntry("RepeatAfterBiome", "Cornucopia",
-                "Insert the repeat after this biome");
+            ExtraBiomes = _cat.CreateEntry("ExtraBiomes", 1,
+                "Number of extra combat biomes to add (0-3, inserted after DeepHarbor)");
+            RandomizeRepeats = _cat.CreateEntry("RandomizeRepeats", false,
+                "Randomize which biomes are used for extra slots");
+            AllBiomesRandom = _cat.CreateEntry("AllBiomesRandom", false,
+                "Completely randomize all combat biome order");
 
             BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 0.0f,
                 "Percent chance per room for a beast (Legendary Beast) fight (0 = disabled)");

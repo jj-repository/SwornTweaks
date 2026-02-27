@@ -58,17 +58,21 @@ Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTw
 |---------|---------|-------------|
 | `DuoChance` | `0.35` | Duo blessing chance (0.35 = 35%) |
 
-### Biome Repeat
+### Increase Run Length
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `EnableBiomeRepeat` | `true` | Insert a repeated biome into the expedition |
-| `RepeatBiome` | `Kingswood` | Which biome to repeat |
-| `RepeatAfterBiome` | `Cornucopia` | Insert the repeat after this biome |
+| `ExtraBiomes` | `1` | Number of extra combat biomes (0-3, inserted after DeepHarbor) |
+| `RandomizeRepeats` | `false` | Randomize which biomes fill the extra slots |
+| `AllBiomesRandom` | `false` | Completely randomize all combat biome order |
 
-Default sequence: Kingswood → Cornucopia → **Kingswood (repeat)** → DeepHarbor → Camelot → Somewhere
+Extra biomes are inserted after the original 3 combat biomes (Kingswood, Cornucopia, DeepHarbor) and before Camelot/Somewhere. By default they cycle in order:
 
-Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`
+- **+1**: ... → DeepHarbor → **Kingswood** → Camelot → Somewhere
+- **+2**: ... → DeepHarbor → **Kingswood** → **Cornucopia** → Camelot → Somewhere
+- **+3**: ... → DeepHarbor → **Kingswood** → **Cornucopia** → **DeepHarbor** → Camelot → Somewhere
+
+With `RandomizeRepeats`, each extra slot is randomly picked from the 3 combat biomes. With `AllBiomesRandom`, all combat biome slots (original + extras) are fully randomized — DeepHarbor could be first, Kingswood could appear twice, etc. Camelot and Somewhere always remain at the end.
 
 ### Beast Rooms
 
@@ -132,9 +136,9 @@ UncommonChance = 0.25
 NoGemCost = true
 NoCurrencyDoorRewards = true
 DuoChance = 0.35
-EnableBiomeRepeat = true
-RepeatBiome = Kingswood
-RepeatAfterBiome = Cornucopia
+ExtraBiomes = 1
+RandomizeRepeats = false
+AllBiomesRandom = false
 BeastChancePercent = 0
 MaxBeastsPerBiome = 5
 BeastRoom1 = 4

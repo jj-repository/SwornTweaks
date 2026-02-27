@@ -18,13 +18,12 @@ from PyQt6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
 GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
-BIOMES = ["Kingswood", "Cornucopia", "DeepHarbor"]
 
 # Highest selectable room index across biomes
 MAX_FIXED_ROOM = 12
@@ -40,9 +39,9 @@ DEFAULTS = {
     "NoGemCost": True,
     "NoCurrencyDoorRewards": True,
     "DuoChance": 0.35,
-    "EnableBiomeRepeat": True,
-    "RepeatBiome": "Kingswood",
-    "RepeatAfterBiome": "Cornucopia",
+    "ExtraBiomes": 1,
+    "RandomizeRepeats": False,
+    "AllBiomesRandom": False,
     "BeastChancePercent": 0.0,
     "MaxBeastsPerBiome": 5,
     "BeastRoom1": 4,
@@ -67,9 +66,9 @@ VANILLA_DEFAULTS = {
     "NoGemCost": False,
     "NoCurrencyDoorRewards": False,
     "DuoChance": 0.0,
-    "EnableBiomeRepeat": False,
-    "RepeatBiome": "Kingswood",
-    "RepeatAfterBiome": "Cornucopia",
+    "ExtraBiomes": 0,
+    "RandomizeRepeats": False,
+    "AllBiomesRandom": False,
     "BeastChancePercent": 0.0,
     "MaxBeastsPerBiome": 5,
     "BeastRoom1": -1,
@@ -271,11 +270,16 @@ class Configurator(QMainWindow):
 
         center.addStretch()
 
-        # ── Right column (Biome Repeat — will be extended) ────────
-        right.addWidget(self._group("Biome Repeat", [
-            self._bool_row("EnableBiomeRepeat", "Enable Biome Repeat"),
-            self._combo_row("RepeatBiome", "Repeat Biome", BIOMES),
-            self._combo_row("RepeatAfterBiome", "Repeat After", BIOMES),
+        # ── Right column ──────────────────────────────────────────
+        right.addWidget(self._group("Increase Run Length", [
+            self._int_row("ExtraBiomes", "Extra Biomes", 0, 3),
+            self._label_row("Adds combat biomes after DeepHarbor.\n"
+                            "1 = +Kingswood, 2 = +Cornucopia,\n"
+                            "3 = +DeepHarbor (cycles in order)"),
+            self._bool_row("RandomizeRepeats", "Randomize Repeated Biomes"),
+            self._bool_row("AllBiomesRandom", "All Biomes Random"),
+            self._label_row("Randomizes all 3 combat biome slots\n"
+                            "plus extras. Camelot/Somewhere stay last."),
         ]))
 
         right.addStretch()
@@ -291,6 +295,10 @@ class Configurator(QMainWindow):
         copyright_label.setStyleSheet("color: gray;")
         bottom.addWidget(copyright_label)
         bottom.addStretch()
+
+        import_btn = QPushButton("Import Config")
+        import_btn.clicked.connect(self._import_config)
+        bottom.addWidget(import_btn)
 
         update_btn = QPushButton("Update from GitHub")
         update_btn.clicked.connect(self._update_from_github)
@@ -425,11 +433,15 @@ class Configurator(QMainWindow):
     # ── Load / Save / Reset ──────────────────────────────────────
 
     def _load(self):
+        self._load_from_cfg(self.cfg_path)
+
+    def _load_from_cfg(self, path: Path | None):
+        """Load values from a cfg file. Falls back to vanilla defaults for missing keys."""
         cfg = ConfigParser()
-        if self.cfg_path and self.cfg_path.exists():
-            cfg.read(str(self.cfg_path))
+        if path and path.exists():
+            cfg.read(str(path))
         for key, widget in self.widgets.items():
-            default = DEFAULTS[key]
+            default = VANILLA_DEFAULTS[key]
             raw = cfg.get(SECTION, key, fallback=None)
             if isinstance(widget, QCheckBox):
                 val = raw.lower() in ("true", "1", "yes") if raw is not None else default
@@ -484,6 +496,31 @@ class Configurator(QMainWindow):
                 widget.setValue(default)
             elif isinstance(widget, QDoubleSpinBox):
                 widget.setValue(self._cfg_to_display(key, default))
+
+    def _import_config(self):
+        """Import settings from an external MelonPreferences.cfg file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import MelonPreferences.cfg", "",
+            "Config files (*.cfg);;All files (*)"
+        )
+        if not path:
+            return
+        p = Path(path)
+        cfg = ConfigParser()
+        try:
+            cfg.read(str(p))
+        except Exception as e:
+            QMessageBox.critical(self, "Import Failed", f"Could not read file:\n{e}")
+            return
+        if not cfg.has_section(SECTION):
+            QMessageBox.warning(
+                self, "Import Failed",
+                f"No [{SECTION}] section found in:\n{p.name}\n\n"
+                "Make sure this is a MelonPreferences.cfg with SwornTweaks settings."
+            )
+            return
+        self._load_from_cfg(p)
+        QMessageBox.information(self, "Imported", f"Settings loaded from:\n{p}")
 
     # ── Update from GitHub ───────────────────────────────────────
 

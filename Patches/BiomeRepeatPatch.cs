@@ -8,74 +8,68 @@ namespace SwornTweaks.Patches
     [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ResetBiomeRunData))]
     static class BiomeRepeatPatch
     {
+        private static readonly Random _rng = new();
+
         static void Prefix(ExpeditionManager __instance)
         {
-            if (!Config.EnableBiomeRepeat.Value) return;
+            int extra = Config.ExtraBiomes.Value;
+            if (extra <= 0) return;
 
             var biomes = __instance.biomes;
-            if (biomes == null || biomes.Count < 2) return;
+            if (biomes == null || biomes.Count < 5) return;
 
-            if (!Enum.TryParse<BiomeType>(Config.RepeatBiome.Value, true, out var repeatType))
-            {
-                MelonLogger.Warning($"[SwornTweaks] Unknown RepeatBiome: '{Config.RepeatBiome.Value}'");
-                return;
-            }
-            if (!Enum.TryParse<BiomeType>(Config.RepeatAfterBiome.Value, true, out var afterType))
-            {
-                MelonLogger.Warning($"[SwornTweaks] Unknown RepeatAfterBiome: '{Config.RepeatAfterBiome.Value}'");
-                return;
-            }
+            // Guard: vanilla has exactly 5 biomes — if already modified, skip
+            if (biomes.Count > 5) return;
 
-            // Guard: if the repeat biome already appears more than once, skip
-            int repeatCount = 0;
-            for (int i = 0; i < biomes.Count; i++)
-                if (biomes[i]?.GetBiomeType() == repeatType) repeatCount++;
-            if (repeatCount > 1)
-            {
-                MelonLogger.Msg($"[SwornTweaks] Biome repeat already present ({repeatType} x{repeatCount}), skipping");
-                return;
-            }
-
-            // Find the "after" biome index
-            int afterIndex = -1;
+            // Find the 3 combat biome data objects and Camelot insertion point
+            BiomeData? kingswood = null, cornucopia = null, deepHarbor = null;
+            int camelotIndex = -1;
             for (int i = 0; i < biomes.Count; i++)
             {
-                if (biomes[i]?.GetBiomeType() == afterType)
+                var bt = biomes[i]?.GetBiomeType();
+                switch (bt)
                 {
-                    afterIndex = i;
-                    break;
+                    case BiomeType.Kingswood: kingswood = biomes[i]; break;
+                    case BiomeType.Cornucopia: cornucopia = biomes[i]; break;
+                    case BiomeType.DeepHarbor: deepHarbor = biomes[i]; break;
+                    case BiomeType.Camelot: camelotIndex = i; break;
                 }
             }
-            if (afterIndex < 0)
-            {
-                MelonLogger.Warning($"[SwornTweaks] RepeatAfterBiome '{afterType}' not found in biome list");
+
+            if (kingswood == null || cornucopia == null || deepHarbor == null || camelotIndex < 0)
                 return;
-            }
 
-            // Find the BiomeData source for the repeat
-            BiomeData? source = null;
-            for (int i = 0; i < biomes.Count; i++)
+            var combat = new[] { kingswood, cornucopia, deepHarbor };
+
+            if (Config.AllBiomesRandom.Value)
             {
-                if (biomes[i]?.GetBiomeType() == repeatType)
-                {
-                    source = biomes[i];
-                    break;
-                }
+                // Replace all 3 combat biomes + add extras, fully randomized
+                for (int i = 2; i >= 0; i--)
+                    biomes.RemoveAt(i);
+
+                // Insert (3 + extra) random combat biomes before Camelot (now at index 0)
+                int total = 3 + extra;
+                for (int i = 0; i < total; i++)
+                    biomes.Insert(i, combat[_rng.Next(3)]);
             }
-            if (source == null)
+            else if (Config.RandomizeRepeats.Value)
             {
-                MelonLogger.Warning($"[SwornTweaks] RepeatBiome '{repeatType}' not found in biome list");
-                return;
+                // Insert random extra biomes after DeepHarbor (before Camelot)
+                for (int i = 0; i < extra; i++)
+                    biomes.Insert(camelotIndex + i, combat[_rng.Next(3)]);
+            }
+            else
+            {
+                // Insert ordered extras: cycle Kingswood, Cornucopia, DeepHarbor
+                for (int i = 0; i < extra; i++)
+                    biomes.Insert(camelotIndex + i, combat[i % 3]);
             }
 
-            biomes.Insert(afterIndex + 1, source);
-
-            MelonLogger.Msg($"[SwornTweaks] Inserted {repeatType} repeat after {afterType} (index {afterIndex + 1}, {biomes.Count} biomes total)");
-
+            // Log the final sequence
             string seq = "";
             for (int i = 0; i < biomes.Count; i++)
                 seq += (i > 0 ? " -> " : "") + biomes[i]?.GetBiomeType().ToString();
-            MelonLogger.Msg($"[SwornTweaks] Biome sequence: {seq}");
+            MelonLogger.Msg($"[SwornTweaks] Biome sequence ({biomes.Count} biomes): {seq}");
         }
     }
 }
