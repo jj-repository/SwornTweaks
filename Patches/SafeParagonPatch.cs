@@ -8,8 +8,8 @@ namespace SwornTweaks.Patches
 {
     /// <summary>
     /// Safety net: the game's SelectParagonType crashes with "Invalid roll: '0'"
-    /// when WeightedTable has no entries (can happen with extra biomes or rarely in vanilla).
-    /// Return the first available type instead of letting it throw.
+    /// when WeightedTable total weight is zero (can happen with extra biomes).
+    /// The Prefix catches empty lists; the Finalizer catches zero-weight tables.
     /// </summary>
     [HarmonyPatch(typeof(BlessingGenerator), nameof(BlessingGenerator.SelectParagonType))]
     static class SafeParagonPatch
@@ -23,6 +23,17 @@ namespace SwornTweaks.Patches
                 return false; // skip original
             }
             return true; // run original
+        }
+
+        static Exception Finalizer(Exception __exception, ref ParagonType __result)
+        {
+            if (__exception != null)
+            {
+                MelonLogger.Warning($"[SwornTweaks] SelectParagonType threw: {__exception.Message} — returning Courage");
+                __result = ParagonType.Courage;
+                return null; // swallow exception
+            }
+            return null;
         }
     }
 }

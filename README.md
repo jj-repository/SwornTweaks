@@ -18,6 +18,8 @@ A visual config editor with auto-update from GitHub:
 python3 configurator.py
 ```
 
+![SwornTweaks Configurator](screenshots/configurator.png)
+
 See [INSTALL.md](INSTALL.md) for setup. Windows standalone `.exe` available in [Releases](https://github.com/jj-repository/SwornTweaks/releases).
 
 ## Configuration

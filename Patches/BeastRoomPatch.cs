@@ -2,91 +2,133 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using Il2Cpp;
+using Il2CppInterop.Runtime;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using MelonLoader;
 
 namespace SwornTweaks.Patches
 {
+    /// <summary>
+    /// Force MiniBoss (beast) encounters in specific rooms.
+    ///
+    /// SelectObjectiveType has CallerCount(0) — it's only called from native
+    /// IL2CPP code inside GeneratePaths, so Harmony can never intercept it.
+    /// Instead, we hook GeneratePaths Postfix and modify the returned Path
+    /// objects to MiniBoss room type with the correct biome beast level.
+    /// </summary>
     [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
-    static class BeastRoomTracker
-    {
-        internal static int CurrentRoom = -1;
-        internal static BiomeType CurrentBiome = BiomeType.None;
-
-        // Track random beast count per biome to enforce MaxBeastsPerBiome
-        internal static readonly Dictionary<BiomeType, int> BeastCounts = new();
-        private static BiomeType _lastBiome = BiomeType.None;
-
-        static void Prefix(int nextRoomIndex, BiomeData biome)
-        {
-            CurrentRoom = nextRoomIndex;
-            CurrentBiome = biome != null ? biome.GetBiomeType() : BiomeType.None;
-
-            // Reset counter when entering a new biome
-            if (CurrentBiome != _lastBiome)
-            {
-                _lastBiome = CurrentBiome;
-                if (!BeastCounts.ContainsKey(CurrentBiome))
-                    BeastCounts[CurrentBiome] = 0;
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.SelectObjectiveType))]
     static class BeastRoomPatch
     {
         private static readonly Random _rng = new();
 
-        static void Postfix(ref ObjectiveType __result, BiomeData biome)
-        {
-            if (Config.UseVanillaBeastSettings.Value) return;
+        // Track random beast count per biome to enforce MaxBeastsPerBiome
+        internal static readonly Dictionary<BiomeType, int> BeastCounts = new();
 
-            var bt = biome != null ? biome.GetBiomeType() : BeastRoomTracker.CurrentBiome;
-            if (bt == BiomeType.Camelot || bt == BiomeType.Somewhere)
+        static void Postfix(ref Il2CppReferenceArray<ExpeditionManager.Path> __result,
+                            int nextRoomIndex, BiomeData biome)
+        {
+            if (__result == null || __result.Length == 0) return;
+
+            var bt = biome != null ? biome.GetBiomeType() : BiomeType.None;
+
+            // Debug: log room intensity for data gathering
+            var firstPath = __result[0];
+            if (firstPath != null)
+                MelonLogger.Msg($"[SwornTweaks] [ROOM] idx={nextRoomIndex} biome={bt} intensity={firstPath.intensity:F2} type={firstPath.roomType}");
+
+            if (Config.UseVanillaBeastSettings.Value) return;
+            if (bt == BiomeType.Camelot || bt == BiomeType.Somewhere || bt == BiomeType.None)
                 return;
 
-            int room = BeastRoomTracker.CurrentRoom;
+            bool force = false;
+            bool isFixed = false;
 
             // 1. Fixed beast rooms — always force
             int br1 = Config.BeastRoom1.Value;
             int br2 = Config.BeastRoom2.Value;
-            if (room >= 0 && (room == br1 || room == br2))
+            if ((br1 >= 0 && nextRoomIndex == br1) || (br2 >= 0 && nextRoomIndex == br2))
             {
-                if (__result != ObjectiveType.MajorEnemy)
+                force = true;
+                isFixed = true;
+            }
+
+            // 2. Random chance — respects max per biome
+            if (!force)
+            {
+                float chance = Config.BeastChancePercent.Value;
+                if (chance <= 0f) return;
+
+                // Check per-biome cap
+                int max = Config.MaxBeastsPerBiome.Value;
+                if (max > 0)
                 {
-                    MelonLogger.Msg($"[SwornTweaks] Fixed beast room {room} triggered");
-                    __result = ObjectiveType.MajorEnemy;
+                    int count = BeastCounts.GetValueOrDefault(bt, 0);
+                    if (count >= max) return;
                 }
+
+                float roll = (float)(_rng.NextDouble() * 100.0);
+                if (roll < chance)
+                {
+                    force = true;
+                    MelonLogger.Msg($"[SwornTweaks] Random beast room {nextRoomIndex} (biome={bt}, roll={roll:F1}% < {chance}%)");
+                }
+            }
+
+            if (!force) return;
+
+            // Build a combined pool of candidate levels
+            bool includeBosses = Config.ForceBiomeBoss.Value;
+            var candidates = new System.Collections.Generic.List<(RoomType type, LevelData level)>();
+
+            // Always include mini-boss levels
+            var mbPool = biome?.MiniBossLevelPool;
+            if (mbPool != null)
+                for (int i = 0; i < mbPool.Length; i++)
+                    if (mbPool[i] != null) candidates.Add((RoomType.MiniBoss, mbPool[i]));
+            var mbFirst = biome?.FirstMiniBossLevel;
+            if (mbFirst != null && candidates.Count == 0)
+                candidates.Add((RoomType.MiniBoss, mbFirst));
+
+            // Optionally include biome end boss levels
+            if (includeBosses)
+            {
+                var bPool = biome?.bossLevelPool;
+                if (bPool != null)
+                    for (int i = 0; i < bPool.Length; i++)
+                        if (bPool[i] != null) candidates.Add((RoomType.Boss, bPool[i]));
+                var bFirst = biome?.firstBossLevel;
+                if (bFirst != null && (bPool == null || bPool.Length == 0))
+                    candidates.Add((RoomType.Boss, bFirst));
+            }
+
+            if (candidates.Count == 0)
+            {
+                MelonLogger.Warning($"[SwornTweaks] No boss levels found for biome {bt} — skipping room {nextRoomIndex}");
                 return;
             }
 
-            // 2. Random chance — only on normal combat rooms, respects max per biome
-            float chance = Config.BeastChancePercent.Value;
-            if (chance <= 0f) return;
+            var pick = candidates[_rng.Next(candidates.Count)];
 
-            if (__result != ObjectiveType.Default && __result != ObjectiveType.Wave
-                && __result != ObjectiveType.Horde && __result != ObjectiveType.Onslaught)
-                return;
+            if (isFixed)
+                MelonLogger.Msg($"[SwornTweaks] Fixed {pick.type} room {nextRoomIndex} (biome={bt}, level={pick.level.name})");
+            else
+                MelonLogger.Msg($"[SwornTweaks] Random {pick.type} room {nextRoomIndex} (biome={bt}, level={pick.level.name})");
 
-            // Check per-biome cap
-            int max = Config.MaxBeastsPerBiome.Value;
-            if (max > 0)
+            // Convert all paths for this room
+            for (int i = 0; i < __result.Length; i++)
             {
-                int count = BeastRoomTracker.BeastCounts.GetValueOrDefault(bt, 0);
-                if (count >= max) return;
+                var path = __result[i];
+                if (path == null) continue;
+                path.roomType = pick.type;
+                path.levelData = pick.level;
             }
 
-            float roll = (float)(_rng.NextDouble() * 100.0);
-            if (roll < chance)
-            {
-                MelonLogger.Msg($"[SwornTweaks] Random beast room {room} triggered (roll={roll:F1}% < {chance}%)");
-                __result = ObjectiveType.MajorEnemy;
-
-                // Increment counter
-                if (!BeastRoomTracker.BeastCounts.ContainsKey(bt))
-                    BeastRoomTracker.BeastCounts[bt] = 0;
-                BeastRoomTracker.BeastCounts[bt]++;
-            }
+            // Increment counter
+            if (!BeastCounts.ContainsKey(bt))
+                BeastCounts[bt] = 0;
+            BeastCounts[bt]++;
         }
+
     }
 
     // Reset beast counts at run start
@@ -95,7 +137,7 @@ namespace SwornTweaks.Patches
     {
         static void Prefix()
         {
-            BeastRoomTracker.BeastCounts.Clear();
+            BeastRoomPatch.BeastCounts.Clear();
         }
     }
 }

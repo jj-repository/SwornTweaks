@@ -53,10 +53,11 @@ VANILLA_DEFAULTS = {
     "EnemyHealthMultiplier": 1.0,
     "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
+    "ForceBiomeBoss": False,
 }
 
-# Keys for beast section that get disabled when UseVanillaBeastSettings is checked
-_BEAST_KEYS = ("BeastChancePercent", "MaxBeastsPerBiome", "BeastRoom1", "BeastRoom2")
+# Keys managed directly by _on_vanilla_beast_toggled (not via enable checkboxes)
+_BEAST_DIRECT_KEYS = ("ForceBiomeBoss",)
 
 _DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
 
@@ -178,6 +179,7 @@ class Configurator(QMainWindow):
         self.setMinimumWidth(960)
         self.widgets: dict[str, QWidget] = {}
         self._workers: list[DownloadWorker] = []
+        self._initial_values: dict[str, object] = {}  # snapshot of cfg values at launch
 
         # Resolve game path
         self.game_path = load_game_path() or find_game_path()
@@ -219,25 +221,74 @@ class Configurator(QMainWindow):
             self._label_row("Bypass all blessing prerequisites"),
         ]))
 
+        left.addWidget(self._group("Spawn Intensity", [
+            self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
+            self._label_row("Scales enemy spawn count per room."),
+        ]))
+
         left.addStretch()
 
         # ── Center column ─────────────────────────────────────────
-        center.addWidget(self._group("Beast Boss Room Spawns", [
-            self._bool_row("UseVanillaBeastSettings", "Use Vanilla Beast Settings"),
-            self._pct_row("BeastChancePercent", "Random Chance", 0, 100),
-            self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15),
-            self._int_row("BeastRoom1", "Fixed Beast Room 1", -1, MAX_FIXED_ROOM),
-            self._int_row("BeastRoom2", "Fixed Beast Room 2", -1, MAX_FIXED_ROOM),
-        ]))
+        # Build Boss Room Spawns rows with toggle checkboxes
+        boss_rows = []
+        boss_rows.append(self._label_row("Makes Beast Bosses Spawn"))
+        boss_rows.append(self._bool_row("UseVanillaBeastSettings", "Use Vanilla Boss Settings"))
+        boss_rows.append(self._bool_row("ForceBiomeBoss", "Also Spawn Main Bosses"))
+        boss_rows.append(self._label_row("Adds biome end bosses to the spawn pool (experimental)."))
+
+        # Random chance: enable checkbox + spinbox on same row
+        random_row = QHBoxLayout()
+        self._random_cb = QCheckBox("Random Chance")
+        random_row.addWidget(self._random_cb)
+        random_row.addStretch()
+        beast_chance_spin = QDoubleSpinBox()
+        beast_chance_spin.setRange(0, 100)
+        beast_chance_spin.setDecimals(1)
+        beast_chance_spin.setSingleStep(1.0)
+        beast_chance_spin.setSuffix(" %")
+        beast_chance_spin.setFixedWidth(100)
+        self.widgets["BeastChancePercent"] = beast_chance_spin
+        random_row.addWidget(beast_chance_spin)
+        boss_rows.append(random_row)
+
+        boss_rows.append(self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15))
+        boss_rows.append(self._label_row("Excludes fixed boss rooms."))
+
+        # Fixed Boss Room 1: enable checkbox + spinbox
+        room1_row = QHBoxLayout()
+        self._room1_cb = QCheckBox("Fixed Boss Room 1")
+        room1_row.addWidget(self._room1_cb)
+        room1_row.addStretch()
+        room1_spin = QSpinBox()
+        room1_spin.setRange(0, MAX_FIXED_ROOM)
+        room1_spin.setFixedWidth(90)
+        self.widgets["BeastRoom1"] = room1_spin
+        room1_row.addWidget(room1_spin)
+        boss_rows.append(room1_row)
+
+        # Fixed Boss Room 2: enable checkbox + spinbox
+        room2_row = QHBoxLayout()
+        self._room2_cb = QCheckBox("Fixed Boss Room 2")
+        room2_row.addWidget(self._room2_cb)
+        room2_row.addStretch()
+        room2_spin = QSpinBox()
+        room2_spin.setRange(0, MAX_FIXED_ROOM)
+        room2_spin.setFixedWidth(90)
+        self.widgets["BeastRoom2"] = room2_spin
+        room2_row.addWidget(room2_spin)
+        boss_rows.append(room2_row)
+
+        boss_rows.append(self._label_row("First room = room 0."))
+        center.addWidget(self._group("Boss Room Spawns", boss_rows))
+
+        # Wire up toggle callbacks for boss room controls
+        self._random_cb.stateChanged.connect(lambda _: self._update_beast_enables())
+        self._room1_cb.stateChanged.connect(lambda _: self._update_beast_enables())
+        self._room2_cb.stateChanged.connect(lambda _: self._update_beast_enables())
 
         center.addWidget(self._group("Health Multipliers", [
             self._float_row("BossHealthMultiplier", "Boss Health", 0.1, 50.0, "x"),
             self._float_row("BeastHealthMultiplier", "Beast Health", 0.1, 50.0, "x"),
-        ]))
-
-        center.addWidget(self._group("Intensity", [
-            self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
-            self._label_row("Scales enemy spawn count per room."),
         ]))
 
         center.addWidget(self._group("Enemy Scaling", [
@@ -249,16 +300,29 @@ class Configurator(QMainWindow):
         center.addStretch()
 
         # ── Right column ──────────────────────────────────────────
-        right.addWidget(self._group("Increase Run Length", [
-            self._int_row("ExtraBiomes", "Extra Biomes", 0, 3),
-            self._label_row("Adds combat biomes after DeepHarbor.\n"
+        # Extra Biomes: enable checkbox + spinbox
+        extra_row = QHBoxLayout()
+        self._extra_cb = QCheckBox("Extra Biomes")
+        extra_row.addWidget(self._extra_cb)
+        extra_row.addStretch()
+        extra_spin = QSpinBox()
+        extra_spin.setRange(1, 3)
+        extra_spin.setFixedWidth(90)
+        self.widgets["ExtraBiomes"] = extra_spin
+        extra_row.addWidget(extra_spin)
+
+        run_rows = [extra_row]
+        run_rows.append(self._label_row("Adds combat biomes after DeepHarbor.\n"
                             "1 = +Kingswood, 2 = +Cornucopia,\n"
-                            "3 = +DeepHarbor (cycles in order)"),
-            self._bool_row("RandomizeRepeats", "Randomize Repeated Biomes"),
-            self._bool_row("AllBiomesRandom", "All Biomes Random"),
-            self._label_row("Randomizes all 3 combat biome slots\n"
-                            "plus extras. Camelot/Somewhere stay last."),
-        ]))
+                            "3 = +DeepHarbor (cycles in order)"))
+        run_rows.append(self._bool_row("RandomizeRepeats", "Randomize Repeated Biomes"))
+        run_rows.append(self._bool_row("AllBiomesRandom", "All Biomes Random"))
+        run_rows.append(self._label_row("Randomizes all 3 combat biome slots\n"
+                            "plus extras. Camelot/Somewhere stay last."))
+        right.addWidget(self._group("Increase Run Length", run_rows))
+
+        # Wire up extra biomes toggle
+        self._extra_cb.stateChanged.connect(lambda _: self._update_extra_enables())
 
         # Mascot image — centered in remaining space
         right.addStretch(1)
@@ -284,6 +348,8 @@ class Configurator(QMainWindow):
         bottom.addStretch()
 
         help_btn = QPushButton("Help")
+        help_btn.setStyleSheet("QPushButton { background-color: #c62828; color: white; font-weight: bold; }"
+                               "QPushButton:hover { background-color: #d32f2f; }")
         help_btn.clicked.connect(self._open_help)
         bottom.addWidget(help_btn)
 
@@ -303,10 +369,24 @@ class Configurator(QMainWindow):
         reset_btn.clicked.connect(self._reset_defaults)
         bottom.addWidget(reset_btn)
 
+        reset_initial_btn = QPushButton("Reset to Initial")
+        reset_initial_btn.setToolTip("Reset all fields to the values loaded when the app first opened")
+        reset_initial_btn.clicked.connect(self._reset_to_initial)
+        bottom.addWidget(reset_initial_btn)
+
         save_btn = QPushButton("Save")
         save_btn.setDefault(True)
+        save_btn.setStyleSheet("QPushButton { background-color: #2e7d32; color: white; font-weight: bold; }"
+                               "QPushButton:hover { background-color: #388e3c; }")
         save_btn.clicked.connect(self._save)
         bottom.addWidget(save_btn)
+
+        start_btn = QPushButton("Start Game")
+        start_btn.setToolTip("Launch SWORN via Steam")
+        start_btn.setStyleSheet("QPushButton { background-color: #1565c0; color: white; font-weight: bold; }"
+                                "QPushButton:hover { background-color: #1976d2; }")
+        start_btn.clicked.connect(self._start_game)
+        bottom.addWidget(start_btn)
 
         outer.addLayout(bottom)
         self.setCentralWidget(central)
@@ -411,16 +491,32 @@ class Configurator(QMainWindow):
 
     def _on_vanilla_beast_toggled(self, _state):
         """Disable beast fields when Use Vanilla Beast Settings is checked."""
-        checked = self.widgets["UseVanillaBeastSettings"].isChecked()
-        for key in _BEAST_KEYS:
-            w = self.widgets[key]
-            w.setEnabled(not checked)
-            if checked:
-                default = VANILLA_DEFAULTS[key]
-                if isinstance(w, QSpinBox):
-                    w.setValue(default)
-                elif isinstance(w, QDoubleSpinBox):
-                    w.setValue(self._cfg_to_display(key, default))
+        vanilla = self.widgets["UseVanillaBeastSettings"].isChecked()
+        # Direct keys (just ForceBiomeBoss)
+        for key in _BEAST_DIRECT_KEYS:
+            self.widgets[key].setEnabled(not vanilla)
+        # Enable checkboxes
+        self._random_cb.setEnabled(not vanilla)
+        self._room1_cb.setEnabled(not vanilla)
+        self._room2_cb.setEnabled(not vanilla)
+        # Update spinbox enable states
+        self._update_beast_enables()
+
+    def _update_extra_enables(self):
+        """Update Extra Biomes spinbox enable state based on checkbox."""
+        enabled = self._extra_cb.isChecked()
+        self.widgets["ExtraBiomes"].setEnabled(enabled)
+        self.widgets["RandomizeRepeats"].setEnabled(enabled)
+        self.widgets["AllBiomesRandom"].setEnabled(enabled)
+
+    def _update_beast_enables(self):
+        """Update spinbox enable states based on vanilla toggle + individual checkboxes."""
+        vanilla = self.widgets["UseVanillaBeastSettings"].isChecked()
+        random_on = not vanilla and self._random_cb.isChecked()
+        self.widgets["BeastChancePercent"].setEnabled(random_on)
+        self.widgets["MaxBeastsPerBiome"].setEnabled(random_on)
+        self.widgets["BeastRoom1"].setEnabled(not vanilla and self._room1_cb.isChecked())
+        self.widgets["BeastRoom2"].setEnabled(not vanilla and self._room2_cb.isChecked())
 
     # ── Percentage helpers ───────────────────────────────────────
 
@@ -438,6 +534,9 @@ class Configurator(QMainWindow):
 
     def _load(self):
         self._load_from_cfg(self.cfg_path)
+        # Snapshot current widget values as "initial" for Reset to Initial
+        if not self._initial_values:
+            self._initial_values = self._snapshot_widgets()
 
     def _load_from_cfg(self, path: Path | None):
         """Load values from a cfg file. Falls back to vanilla defaults for missing keys."""
@@ -458,10 +557,29 @@ class Configurator(QMainWindow):
                 widget.setChecked(val)
             elif isinstance(widget, QSpinBox):
                 val = int(raw) if raw is not None else default
-                widget.setValue(val)
+                # BeastRoom spinboxes have range 0+; clamp -1 to 0
+                widget.setValue(max(val, widget.minimum()))
             elif isinstance(widget, QDoubleSpinBox):
                 val = float(raw) if raw is not None else default
                 widget.setValue(self._cfg_to_display(key, val))
+
+        # Set enable checkboxes based on loaded cfg values
+        br1_raw = cfg.get(SECTION, "BeastRoom1", fallback=None)
+        br1_val = int(br1_raw) if br1_raw is not None else VANILLA_DEFAULTS["BeastRoom1"]
+        self._room1_cb.setChecked(br1_val >= 0)
+
+        br2_raw = cfg.get(SECTION, "BeastRoom2", fallback=None)
+        br2_val = int(br2_raw) if br2_raw is not None else VANILLA_DEFAULTS["BeastRoom2"]
+        self._room2_cb.setChecked(br2_val >= 0)
+
+        chance_val = self.widgets["BeastChancePercent"].value()
+        self._random_cb.setChecked(chance_val > 0)
+
+        extra_val = self.widgets["ExtraBiomes"].value()
+        self._extra_cb.setChecked(extra_val > 0)
+
+        self._update_beast_enables()
+        self._update_extra_enables()
 
     def _save(self):
         if not self.cfg_path:
@@ -483,10 +601,22 @@ class Configurator(QMainWindow):
             if isinstance(widget, QCheckBox):
                 cfg.set(SECTION, key, str(widget.isChecked()).lower())
             elif isinstance(widget, QSpinBox):
-                cfg.set(SECTION, key, str(widget.value()))
+                # Toggle-controlled room fields: write -1 when disabled
+                if key == "BeastRoom1" and not self._room1_cb.isChecked():
+                    cfg.set(SECTION, key, "-1")
+                elif key == "BeastRoom2" and not self._room2_cb.isChecked():
+                    cfg.set(SECTION, key, "-1")
+                elif key == "ExtraBiomes" and not self._extra_cb.isChecked():
+                    cfg.set(SECTION, key, "0")
+                else:
+                    cfg.set(SECTION, key, str(widget.value()))
             elif isinstance(widget, QDoubleSpinBox):
-                val = self._display_to_cfg(key, widget.value())
-                cfg.set(SECTION, key, f"{val:g}")
+                # Toggle-controlled random chance: write 0 when disabled
+                if key == "BeastChancePercent" and not self._random_cb.isChecked():
+                    cfg.set(SECTION, key, "0.0")
+                else:
+                    val = self._display_to_cfg(key, widget.value())
+                    cfg.set(SECTION, key, f"{val:g}")
 
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cfg_path, "w") as f:
@@ -503,9 +633,60 @@ class Configurator(QMainWindow):
             if isinstance(widget, QCheckBox):
                 widget.setChecked(default)
             elif isinstance(widget, QSpinBox):
-                widget.setValue(default)
+                # Room defaults are -1 but spinbox min is 0; set to 0
+                widget.setValue(max(default, widget.minimum()))
             elif isinstance(widget, QDoubleSpinBox):
                 widget.setValue(self._cfg_to_display(key, default))
+        # Reset enable toggles (vanilla: rooms off, random off, extra off)
+        self._room1_cb.setChecked(False)
+        self._room2_cb.setChecked(False)
+        self._random_cb.setChecked(False)
+        self._extra_cb.setChecked(False)
+        self._update_beast_enables()
+        self._update_extra_enables()
+
+    def _snapshot_widgets(self) -> dict[str, object]:
+        """Capture current widget values as a dict."""
+        snap = {}
+        for key, widget in self.widgets.items():
+            if isinstance(widget, QCheckBox):
+                snap[key] = widget.isChecked()
+            elif isinstance(widget, QSpinBox):
+                snap[key] = widget.value()
+            elif isinstance(widget, QDoubleSpinBox):
+                snap[key] = widget.value()
+        # Also snapshot toggle checkbox states
+        snap["_room1_enabled"] = self._room1_cb.isChecked()
+        snap["_room2_enabled"] = self._room2_cb.isChecked()
+        snap["_random_enabled"] = self._random_cb.isChecked()
+        snap["_extra_enabled"] = self._extra_cb.isChecked()
+        return snap
+
+    def _reset_to_initial(self):
+        """Reset all fields to the values loaded when the app first opened."""
+        if not self._initial_values:
+            return
+        for key, widget in self.widgets.items():
+            val = self._initial_values.get(key)
+            if val is None:
+                continue
+            if isinstance(widget, QCheckBox):
+                widget.setChecked(val)
+            elif isinstance(widget, QSpinBox):
+                widget.setValue(val)
+            elif isinstance(widget, QDoubleSpinBox):
+                widget.setValue(val)
+        # Restore toggle checkbox states
+        self._room1_cb.setChecked(self._initial_values.get("_room1_enabled", False))
+        self._room2_cb.setChecked(self._initial_values.get("_room2_enabled", False))
+        self._random_cb.setChecked(self._initial_values.get("_random_enabled", False))
+        self._extra_cb.setChecked(self._initial_values.get("_extra_enabled", False))
+        self._update_beast_enables()
+        self._update_extra_enables()
+
+    def _start_game(self):
+        """Launch SWORN via Steam."""
+        QDesktopServices.openUrl(QUrl("steam://rungameid/1763250"))
 
     def _import_config(self):
         """Import settings from an external MelonPreferences.cfg file."""

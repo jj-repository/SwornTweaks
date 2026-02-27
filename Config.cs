@@ -36,6 +36,7 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<int> MaxBeastsPerBiome = null!;
         internal static MelonPreferences_Entry<int> BeastRoom1 = null!;
         internal static MelonPreferences_Entry<int> BeastRoom2 = null!;
+        internal static MelonPreferences_Entry<bool> ForceBiomeBoss = null!;
 
         // Health multipliers
         internal static MelonPreferences_Entry<float> BossHealthMultiplier = null!;
@@ -96,6 +97,8 @@ namespace SwornTweaks
                 "Force beast at this 0-based room index (-1 = disabled)");
             BeastRoom2 = _cat.CreateEntry("BeastRoom2", -1,
                 "Force beast at this 0-based room index (-1 = disabled)");
+            ForceBiomeBoss = _cat.CreateEntry("ForceBiomeBoss", false,
+                "Fixed beast rooms spawn biome end boss instead of mini-boss (experimental)");
 
             BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 2.0f,
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");
