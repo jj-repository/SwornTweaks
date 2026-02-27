@@ -50,6 +50,8 @@ DEFAULTS = {
     "BossHealthMultiplier": 2.0,
     "BeastHealthMultiplier": 2.0,
     "IntensityMultiplier": 1.0,
+    "EnemyHealthMultiplier": 1.0,
+    "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
 }
 
@@ -74,6 +76,8 @@ VANILLA_DEFAULTS = {
     "BossHealthMultiplier": 1.0,
     "BeastHealthMultiplier": 1.0,
     "IntensityMultiplier": 1.0,
+    "EnemyHealthMultiplier": 1.0,
+    "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
 }
 
@@ -230,6 +234,7 @@ class Configurator(QMainWindow):
 
         left.addWidget(self._group("Blessing Selection", [
             self._bool_row("ChaosMode", "Chaos Mode"),
+            self._label_row("Bypass all blessing prerequisites"),
         ]))
 
         left.addStretch()
@@ -249,7 +254,13 @@ class Configurator(QMainWindow):
 
         center.addWidget(self._group("Intensity", [
             self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
-            self._label_row("Scales enemy spawn count per room.\nDoes NOT affect enemy health or damage."),
+            self._label_row("Scales enemy spawn count per room."),
+        ]))
+
+        center.addWidget(self._group("Enemy Scaling", [
+            self._float_row("EnemyHealthMultiplier", "Enemy Health", 0.1, 50.0, "x"),
+            self._float_row("EnemyDamageMultiplier", "Enemy Damage", 0.1, 50.0, "x"),
+            self._label_row("Affects normal enemies only.\nBoss/beast health has its own multipliers."),
         ]))
 
         center.addStretch()

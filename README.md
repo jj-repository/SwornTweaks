@@ -88,6 +88,15 @@ Room indices are 0-based within each biome. Room counts: Kingswood=15 (0-14), Co
 | `BossHealthMultiplier` | `2.0` | Health multiplier for bosses like Gawain, Arthur (1.0 = no change) |
 | `BeastHealthMultiplier` | `2.0` | Health multiplier for legendary beasts like Dagonet (1.0 = no change) |
 
+### Enemy Scaling
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `EnemyHealthMultiplier` | `1.0` | Health multiplier for normal enemies (1.0 = no change) |
+| `EnemyDamageMultiplier` | `1.0` | Damage multiplier for normal enemies (1.0 = no change) |
+
+Affects regular enemies only — bosses and legendary beasts use their own multipliers above.
+
 ### Intensity
 
 | Setting | Default | Description |
@@ -126,6 +135,8 @@ BeastRoom1 = 4
 BeastRoom2 = 8
 BossHealthMultiplier = 2
 BeastHealthMultiplier = 2
+EnemyHealthMultiplier = 1
+EnemyDamageMultiplier = 1
 IntensityMultiplier = 1
 ChaosMode = false
 ```

@@ -43,6 +43,10 @@ namespace SwornTweaks
         // Intensity
         internal static MelonPreferences_Entry<float> IntensityMultiplier = null!;
 
+        // Enemy scaling (normal enemies only)
+        internal static MelonPreferences_Entry<float> EnemyHealthMultiplier = null!;
+        internal static MelonPreferences_Entry<float> EnemyDamageMultiplier = null!;
+
         // Blessing selection
         internal static MelonPreferences_Entry<bool> ChaosMode = null!;
 
@@ -96,6 +100,11 @@ namespace SwornTweaks
 
             IntensityMultiplier = _cat.CreateEntry("IntensityMultiplier", 1.0f,
                 "Global room intensity multiplier (1.0 = no change, higher = harder spawns)");
+
+            EnemyHealthMultiplier = _cat.CreateEntry("EnemyHealthMultiplier", 1.0f,
+                "Health multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");
+            EnemyDamageMultiplier = _cat.CreateEntry("EnemyDamageMultiplier", 1.0f,
+                "Damage multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");
 
             ChaosMode = _cat.CreateEntry("ChaosMode", false,
                 "Bypass all blessing prerequisite checks (any blessing can appear at any banner)");
