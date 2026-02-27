@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.5.0"
+VERSION = "1.5.2"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
