@@ -17,7 +17,7 @@ namespace SwornTweaks
             LoggerInstance.Msg($"  NoCurrencyDoorRewards: {Config.NoCurrencyDoorRewards.Value}");
             LoggerInstance.Msg($"  DuoChance: {Config.DuoChance.Value}");
             LoggerInstance.Msg($"  BiomeRepeat: {Config.EnableBiomeRepeat.Value} ({Config.RepeatBiome.Value} after {Config.RepeatAfterBiome.Value})");
-            LoggerInstance.Msg($"  BeastChance: {Config.BeastChancePercent.Value}%");
+            LoggerInstance.Msg($"  BeastChance: {Config.BeastChancePercent.Value}%, Hardset: [{Config.BeastRoom1.Value}, {Config.BeastRoom2.Value}]");
             LoggerInstance.Msg($"  BossHP: {Config.BossHealthMultiplier.Value}x, BeastHP: {Config.BeastHealthMultiplier.Value}x");
         }
     }

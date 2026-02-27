@@ -31,6 +31,8 @@ namespace SwornTweaks
 
         // Beast rooms
         internal static MelonPreferences_Entry<float> BeastChancePercent = null!;
+        internal static MelonPreferences_Entry<int> BeastRoom1 = null!;
+        internal static MelonPreferences_Entry<int> BeastRoom2 = null!;
 
         // Health multipliers
         internal static MelonPreferences_Entry<float> BossHealthMultiplier = null!;
@@ -70,6 +72,10 @@ namespace SwornTweaks
 
             BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 15.0f,
                 "Percent chance per room for a beast (Legendary Beast) fight (0 = disabled)");
+            BeastRoom1 = _cat.CreateEntry("BeastRoom1", -1,
+                "Force beast at this 0-based room index (-1 = disabled)");
+            BeastRoom2 = _cat.CreateEntry("BeastRoom2", -1,
+                "Force beast at this 0-based room index (-1 = disabled)");
 
             BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 3.0f,
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");

@@ -9,9 +9,19 @@ All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, door rew
 3. Remove any old individual mod DLLs (SwornRerollMod, SwornRarityMod, SwornNoGemCost, SwornNoCurrencyDoorRewards, SwornDuoBoost, SwornMoreRooms)
 4. Launch the game — config file is created automatically
 
+## Configurator GUI
+
+A visual config editor is included — no need to edit the cfg file by hand:
+
+```bash
+python3 configurator.py
+```
+
+All settings can be adjusted with spinboxes, checkboxes, and dropdowns. Click **Save** to write to the cfg file.
+
 ## Configuration
 
-Edit `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTweaks]` section. Changes take effect on the next run start (no game restart needed for most settings).
+Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTweaks]` section. Changes take effect on the next run start (no game restart needed for most settings).
 
 ### Rerolls
 
@@ -63,8 +73,10 @@ Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`, `Camelot`, `Somewher
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `BeastChancePercent` | `15.0` | % chance per room for a Legendary Beast fight (0 = disabled) |
+| `BeastRoom1` | `-1` | Force beast at this 0-based room index (-1 = disabled) |
+| `BeastRoom2` | `-1` | Force beast at this 0-based room index (-1 = disabled) |
 
-Beast rooms spawn randomly in Kingswood, Cornucopia, and DeepHarbor. They are skipped in Camelot and Somewhere. Only normal combat rooms (Default, Wave, Horde, Onslaught) can be replaced.
+Beast rooms spawn randomly in Kingswood, Cornucopia, and DeepHarbor. They are skipped in Camelot and Somewhere. Only normal combat rooms (Default, Wave, Horde, Onslaught) can be replaced by random chance. Hardset rooms always trigger regardless of objective type.
 
 ### Health Multipliers
 
@@ -89,6 +101,8 @@ EnableBiomeRepeat = true
 RepeatBiome = Kingswood
 RepeatAfterBiome = Cornucopia
 BeastChancePercent = 15
+BeastRoom1 = -1
+BeastRoom2 = -1
 BossHealthMultiplier = 3
 BeastHealthMultiplier = 2
 ```

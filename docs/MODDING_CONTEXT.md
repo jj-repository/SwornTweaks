@@ -18,8 +18,9 @@ Complete reference for modding Sworn with MelonLoader. Covers game architecture,
 **Active:**
 - `SwornTweaks.dll` — unified all-in-one mod (configurable via MelonPreferences). Source: `SwornTweaks/`. Combines:
   - Rerolls (+500 base), blessing rarity boosts, gem cost skip, currency door reward replacement, duo boost (35%)
-  - Biome repeat (Kingswood after Cornucopia by default), random beast rooms (15% chance)
+  - Biome repeat (Kingswood after Cornucopia by default), random beast rooms (15% chance) + hardset beast room indices
   - Boss/beast health multipliers (3x boss, 2x beast by default)
+  - Includes `configurator.py` — PyQt6 GUI for editing all settings visually
   - Patches: `RerollManager.OnRunStarted`, `BlessingGenerator.GenerateBlessings`, `BlessingGenerator.GetOddsForClassification`, `CurrencyManager.AddGold/GetGold`, `PathGenerator.GeneratePaths`, `PathGenerator.SelectObjectiveType`, `ExpeditionManager.ResetBiomeRunData`, `Mob.SetMobDifficultyScaling`
 
 **Superseded by SwornTweaks (old source folders deleted, DLLs in `Mods_Disabled/`):**
