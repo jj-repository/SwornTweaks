@@ -17,7 +17,8 @@ SECTION = "SwornTweaks"
 BIOMES = ["Kingswood", "Cornucopia", "DeepHarbor", "Camelot", "Somewhere"]
 
 DEFAULTS = {
-    "BonusRerolls": 500,
+    "BonusRerolls": 50,
+    "InfiniteRerolls": False,
     "LegendaryChance": 0.03,
     "EpicChance": 0.08,
     "RareChance": 0.20,
@@ -28,32 +29,39 @@ DEFAULTS = {
     "EnableBiomeRepeat": True,
     "RepeatBiome": "Kingswood",
     "RepeatAfterBiome": "Cornucopia",
-    "BeastChancePercent": 15.0,
-    "BeastRoom1": -1,
-    "BeastRoom2": -1,
-    "BossHealthMultiplier": 3.0,
+    "BeastChancePercent": 0.0,
+    "BeastRoom1": 4,
+    "BeastRoom2": 8,
+    "BossHealthMultiplier": 2.0,
     "BeastHealthMultiplier": 2.0,
 }
+
+# Keys where cfg stores a decimal (0.03) but GUI shows percentage (3%)
+_DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
 
 
 class Configurator(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SwornTweaks Configurator")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(700)
         self.widgets: dict[str, QWidget] = {}
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setSpacing(10)
+        central = QWidget()
+        outer = QVBoxLayout(central)
 
-        layout.addWidget(self._group("Rerolls", [
+        # Two-column layout
+        columns = QHBoxLayout()
+        left = QVBoxLayout()
+        right = QVBoxLayout()
+
+        # ── Left column ──────────────────────────────────────────
+        left.addWidget(self._group("Rerolls", [
             self._int_row("BonusRerolls", "Bonus Rerolls", 0, 9999),
+            self._bool_row("InfiniteRerolls", "Infinite Rerolls (500 per scene)"),
         ]))
 
-        layout.addWidget(self._group("Blessing Rarity", [
+        left.addWidget(self._group("Blessing Rarity", [
             self._pct_row("LegendaryChance", "Legendary Chance", 0, 100),
             self._pct_row("EpicChance", "Epic Chance", 0, 100),
             self._pct_row("RareChance", "Rare Chance", 0, 100),
@@ -61,27 +69,36 @@ class Configurator(QMainWindow):
             self._pct_row("DuoChance", "Duo Chance", 0, 100),
         ]))
 
-        layout.addWidget(self._group("Toggles", [
+        left.addWidget(self._group("Toggles", [
             self._bool_row("NoGemCost", "No Gem Cost"),
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
         ]))
 
-        layout.addWidget(self._group("Biome Repeat", [
+        left.addStretch()
+
+        # ── Right column ─────────────────────────────────────────
+        right.addWidget(self._group("Biome Repeat", [
             self._bool_row("EnableBiomeRepeat", "Enable Biome Repeat"),
             self._combo_row("RepeatBiome", "Repeat Biome", BIOMES),
             self._combo_row("RepeatAfterBiome", "Repeat After", BIOMES),
         ]))
 
-        layout.addWidget(self._group("Beast Rooms", [
+        right.addWidget(self._group("Beast Rooms", [
             self._pct_row("BeastChancePercent", "Random Chance", 0, 100),
             self._int_row("BeastRoom1", "Hardset Room 1", -1, 20),
             self._int_row("BeastRoom2", "Hardset Room 2", -1, 20),
         ]))
 
-        layout.addWidget(self._group("Health Multipliers", [
+        right.addWidget(self._group("Health Multipliers", [
             self._float_row("BossHealthMultiplier", "Boss Health", 0.1, 50.0, "x"),
             self._float_row("BeastHealthMultiplier", "Beast Health", 0.1, 50.0, "x"),
         ]))
+
+        right.addStretch()
+
+        columns.addLayout(left)
+        columns.addLayout(right)
+        outer.addLayout(columns)
 
         # Buttons
         btn_row = QHBoxLayout()
@@ -93,15 +110,12 @@ class Configurator(QMainWindow):
         save_btn.setDefault(True)
         save_btn.clicked.connect(self._save)
         btn_row.addWidget(save_btn)
-        layout.addLayout(btn_row)
+        outer.addLayout(btn_row)
 
-        layout.addStretch()
-        scroll.setWidget(container)
-        self.setCentralWidget(scroll)
-
+        self.setCentralWidget(central)
         self._load()
 
-    # ── Widget builders ──────────────────────────────────────────────
+    # ── Widget builders ──────────────────────────────────────────
 
     def _group(self, title: str, rows: list[QHBoxLayout]) -> QGroupBox:
         box = QGroupBox(title)
@@ -138,7 +152,6 @@ class Configurator(QMainWindow):
         return row
 
     def _pct_row(self, key: str, label: str, lo: float, hi: float) -> QHBoxLayout:
-        """Percentage row — displayed as 0-100%, stored as decimal in cfg."""
         row = QHBoxLayout()
         row.addWidget(QLabel(label))
         row.addStretch()
@@ -171,18 +184,17 @@ class Configurator(QMainWindow):
         row.addWidget(combo)
         return row
 
-    # ── Percentage helpers (cfg stores 0.03, GUI shows 3%) ───────
-
-    _PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance",
-                 "DuoChance", "BeastChancePercent"}
+    # ── Percentage helpers ───────────────────────────────────────
 
     def _cfg_to_display(self, key: str, value: float) -> float:
-        if key in self._PCT_KEYS and key != "BeastChancePercent":
+        """Convert cfg value to GUI display value."""
+        if key in _DECIMAL_PCT_KEYS:
             return value * 100.0
         return value
 
     def _display_to_cfg(self, key: str, value: float) -> float:
-        if key in self._PCT_KEYS and key != "BeastChancePercent":
+        """Convert GUI display value to cfg value."""
+        if key in _DECIMAL_PCT_KEYS:
             return value / 100.0
         return value
 
@@ -222,7 +234,6 @@ class Configurator(QMainWindow):
                 cfg.set(SECTION, key, str(widget.value()))
             elif isinstance(widget, QDoubleSpinBox):
                 val = self._display_to_cfg(key, widget.value())
-                # Clean format: no trailing zeros for common values
                 cfg.set(SECTION, key, f"{val:g}")
 
         CFG_PATH.parent.mkdir(parents=True, exist_ok=True)

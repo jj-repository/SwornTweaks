@@ -27,7 +27,8 @@ Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTw
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `BonusRerolls` | `500` | Extra rerolls added at the start of each run |
+| `BonusRerolls` | `50` | Extra rerolls added at the start of each run |
+| `InfiniteRerolls` | `false` | Set rerolls to 500 on every scene load |
 
 ### Blessing Rarity
 
@@ -72,9 +73,9 @@ Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`, `Camelot`, `Somewher
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `BeastChancePercent` | `15.0` | % chance per room for a Legendary Beast fight (0 = disabled) |
-| `BeastRoom1` | `-1` | Force beast at this 0-based room index (-1 = disabled) |
-| `BeastRoom2` | `-1` | Force beast at this 0-based room index (-1 = disabled) |
+| `BeastChancePercent` | `0` | % chance per room for a Legendary Beast fight (0 = disabled) |
+| `BeastRoom1` | `4` | Force beast at this 0-based room index (-1 = disabled) |
+| `BeastRoom2` | `8` | Force beast at this 0-based room index (-1 = disabled) |
 
 Beast rooms spawn randomly in Kingswood, Cornucopia, and DeepHarbor. They are skipped in Camelot and Somewhere. Only normal combat rooms (Default, Wave, Horde, Onslaught) can be replaced by random chance. Hardset rooms always trigger regardless of objective type.
 
@@ -82,14 +83,15 @@ Beast rooms spawn randomly in Kingswood, Cornucopia, and DeepHarbor. They are sk
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `BossHealthMultiplier` | `3.0` | Health multiplier for bosses like Gawain, Arthur (1.0 = no change) |
+| `BossHealthMultiplier` | `2.0` | Health multiplier for bosses like Gawain, Arthur (1.0 = no change) |
 | `BeastHealthMultiplier` | `2.0` | Health multiplier for legendary beasts like Dagonet (1.0 = no change) |
 
 ## Example Config
 
 ```ini
 [SwornTweaks]
-BonusRerolls = 500
+BonusRerolls = 50
+InfiniteRerolls = false
 LegendaryChance = 0.03
 EpicChance = 0.08
 RareChance = 0.2
@@ -100,10 +102,10 @@ DuoChance = 0.35
 EnableBiomeRepeat = true
 RepeatBiome = Kingswood
 RepeatAfterBiome = Cornucopia
-BeastChancePercent = 15
-BeastRoom1 = -1
-BeastRoom2 = -1
-BossHealthMultiplier = 3
+BeastChancePercent = 0
+BeastRoom1 = 4
+BeastRoom2 = 8
+BossHealthMultiplier = 2
 BeastHealthMultiplier = 2
 ```
 

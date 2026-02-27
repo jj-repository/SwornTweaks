@@ -1,4 +1,5 @@
 using MelonLoader;
+using SwornTweaks.Patches;
 
 [assembly: MelonInfo(typeof(SwornTweaks.Core), "SwornTweaks", "1.0.0", "Vercility")]
 [assembly: MelonGame("Windwalk Games", "SWORN")]
@@ -11,7 +12,7 @@ namespace SwornTweaks
         {
             Config.Init();
             LoggerInstance.Msg("SwornTweaks loaded.");
-            LoggerInstance.Msg($"  Rerolls: +{Config.BonusRerolls.Value}");
+            LoggerInstance.Msg($"  Rerolls: +{Config.BonusRerolls.Value}, Infinite: {Config.InfiniteRerolls.Value}");
             LoggerInstance.Msg($"  Rarity: L={Config.LegendaryChance.Value} E={Config.EpicChance.Value} R={Config.RareChance.Value} U={Config.UncommonChance.Value}");
             LoggerInstance.Msg($"  NoGemCost: {Config.NoGemCost.Value}");
             LoggerInstance.Msg($"  NoCurrencyDoorRewards: {Config.NoCurrencyDoorRewards.Value}");
@@ -19,6 +20,14 @@ namespace SwornTweaks
             LoggerInstance.Msg($"  BiomeRepeat: {Config.EnableBiomeRepeat.Value} ({Config.RepeatBiome.Value} after {Config.RepeatAfterBiome.Value})");
             LoggerInstance.Msg($"  BeastChance: {Config.BeastChancePercent.Value}%, Hardset: [{Config.BeastRoom1.Value}, {Config.BeastRoom2.Value}]");
             LoggerInstance.Msg($"  BossHP: {Config.BossHealthMultiplier.Value}x, BeastHP: {Config.BeastHealthMultiplier.Value}x");
+        }
+
+        public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+        {
+            if (!Config.InfiniteRerolls.Value) return;
+            var rm = RerollPatch.Instance;
+            if (rm == null) return;
+            rm.baseRerolls = 500;
         }
     }
 }

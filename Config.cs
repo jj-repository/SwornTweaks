@@ -8,6 +8,7 @@ namespace SwornTweaks
 
         // Rerolls
         internal static MelonPreferences_Entry<int> BonusRerolls = null!;
+        internal static MelonPreferences_Entry<bool> InfiniteRerolls = null!;
 
         // Blessing rarity
         internal static MelonPreferences_Entry<float> LegendaryChance = null!;
@@ -42,8 +43,10 @@ namespace SwornTweaks
         {
             _cat = MelonPreferences.CreateCategory("SwornTweaks");
 
-            BonusRerolls = _cat.CreateEntry("BonusRerolls", 500,
+            BonusRerolls = _cat.CreateEntry("BonusRerolls", 50,
                 "Extra rerolls added at the start of each run");
+            InfiniteRerolls = _cat.CreateEntry("InfiniteRerolls", false,
+                "Set rerolls to 500 on every scene load");
 
             LegendaryChance = _cat.CreateEntry("LegendaryChance", 0.03f,
                 "Base chance for legendary blessings");
@@ -70,14 +73,14 @@ namespace SwornTweaks
             RepeatAfterBiome = _cat.CreateEntry("RepeatAfterBiome", "Cornucopia",
                 "Insert the repeat after this biome");
 
-            BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 15.0f,
+            BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 0.0f,
                 "Percent chance per room for a beast (Legendary Beast) fight (0 = disabled)");
-            BeastRoom1 = _cat.CreateEntry("BeastRoom1", -1,
+            BeastRoom1 = _cat.CreateEntry("BeastRoom1", 4,
                 "Force beast at this 0-based room index (-1 = disabled)");
-            BeastRoom2 = _cat.CreateEntry("BeastRoom2", -1,
+            BeastRoom2 = _cat.CreateEntry("BeastRoom2", 8,
                 "Force beast at this 0-based room index (-1 = disabled)");
 
-            BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 3.0f,
+            BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 2.0f,
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");
             BeastHealthMultiplier = _cat.CreateEntry("BeastHealthMultiplier", 2.0f,
                 "Health multiplier for legendary beasts like Dagonet (1.0 = no change)");
