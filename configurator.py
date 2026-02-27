@@ -24,7 +24,7 @@ GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
 GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
-BIOMES = ["Kingswood", "Cornucopia", "DeepHarbor", "Camelot", "Somewhere"]
+BIOMES = ["Kingswood", "Cornucopia", "DeepHarbor"]
 
 # Highest selectable room index across biomes
 MAX_FIXED_ROOM = 12
@@ -50,6 +50,7 @@ DEFAULTS = {
     "BossHealthMultiplier": 2.0,
     "BeastHealthMultiplier": 2.0,
     "IntensityMultiplier": 1.0,
+    "PlayerHealthMultiplier": 1.0,
     "EnemyHealthMultiplier": 1.0,
     "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
@@ -76,6 +77,7 @@ VANILLA_DEFAULTS = {
     "BossHealthMultiplier": 1.0,
     "BeastHealthMultiplier": 1.0,
     "IntensityMultiplier": 1.0,
+    "PlayerHealthMultiplier": 1.0,
     "EnemyHealthMultiplier": 1.0,
     "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
@@ -230,6 +232,10 @@ class Configurator(QMainWindow):
         left.addWidget(self._group("Toggles", [
             self._bool_row("NoGemCost", "No Gem Cost"),
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
+        ]))
+
+        left.addWidget(self._group("Player", [
+            self._float_row("PlayerHealthMultiplier", "Health Multiplier", 0.1, 50.0, "x"),
         ]))
 
         left.addWidget(self._group("Blessing Selection", [

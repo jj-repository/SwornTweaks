@@ -43,6 +43,9 @@ namespace SwornTweaks
         // Intensity
         internal static MelonPreferences_Entry<float> IntensityMultiplier = null!;
 
+        // Player scaling
+        internal static MelonPreferences_Entry<float> PlayerHealthMultiplier = null!;
+
         // Enemy scaling (normal enemies only)
         internal static MelonPreferences_Entry<float> EnemyHealthMultiplier = null!;
         internal static MelonPreferences_Entry<float> EnemyDamageMultiplier = null!;
@@ -100,6 +103,9 @@ namespace SwornTweaks
 
             IntensityMultiplier = _cat.CreateEntry("IntensityMultiplier", 1.0f,
                 "Global room intensity multiplier (1.0 = no change, higher = harder spawns)");
+
+            PlayerHealthMultiplier = _cat.CreateEntry("PlayerHealthMultiplier", 1.0f,
+                "Health multiplier for the player character (1.0 = no change)");
 
             EnemyHealthMultiplier = _cat.CreateEntry("EnemyHealthMultiplier", 1.0f,
                 "Health multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");

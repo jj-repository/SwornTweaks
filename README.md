@@ -68,7 +68,7 @@ Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTw
 
 Default sequence: Kingswood → Cornucopia → **Kingswood (repeat)** → DeepHarbor → Camelot → Somewhere
 
-Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`, `Camelot`, `Somewhere`
+Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`
 
 ### Beast Rooms
 
@@ -80,6 +80,12 @@ Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`, `Camelot`, `Somewher
 | `BeastRoom2` | `8` | Fixed beast boss at this room index (-1 = off, max 12) |
 
 Room indices are 0-based within each biome. Room counts: Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12). Fixed rooms always trigger; random chance only replaces normal combat rooms and respects the per-biome cap.
+
+### Player
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `PlayerHealthMultiplier` | `1.0` | Health multiplier for the player character (1.0 = no change) |
 
 ### Health Multipliers
 
@@ -133,6 +139,7 @@ BeastChancePercent = 0
 MaxBeastsPerBiome = 5
 BeastRoom1 = 4
 BeastRoom2 = 8
+PlayerHealthMultiplier = 1
 BossHealthMultiplier = 2
 BeastHealthMultiplier = 2
 EnemyHealthMultiplier = 1
