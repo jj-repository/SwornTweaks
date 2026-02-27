@@ -5,7 +5,6 @@ import json
 import os
 import platform
 import sys
-import urllib.error
 import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
@@ -13,12 +12,12 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap, QFont, QPen
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+    QApplication, QCheckBox, QDoubleSpinBox, QFileDialog,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
@@ -392,17 +391,6 @@ class Configurator(QMainWindow):
         row.addStretch()
         return row
 
-    def _combo_row(self, key: str, label: str, items: list[str]) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.addWidget(QLabel(label))
-        row.addStretch()
-        combo = QComboBox()
-        combo.addItems(items)
-        combo.setFixedWidth(140)
-        self.widgets[key] = combo
-        row.addWidget(combo)
-        return row
-
     def _label_row(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setStyleSheet("color: gray; font-size: 11px;")
@@ -452,10 +440,6 @@ class Configurator(QMainWindow):
             if isinstance(widget, QCheckBox):
                 val = raw.lower() in ("true", "1", "yes") if raw is not None else default
                 widget.setChecked(val)
-            elif isinstance(widget, QComboBox):
-                val = raw if raw is not None else default
-                idx = widget.findText(val, Qt.MatchFlag.MatchFixedString)
-                widget.setCurrentIndex(max(idx, 0))
             elif isinstance(widget, QSpinBox):
                 val = int(raw) if raw is not None else default
                 widget.setValue(val)
@@ -475,8 +459,6 @@ class Configurator(QMainWindow):
         for key, widget in self.widgets.items():
             if isinstance(widget, QCheckBox):
                 cfg.set(SECTION, key, str(widget.isChecked()).lower())
-            elif isinstance(widget, QComboBox):
-                cfg.set(SECTION, key, widget.currentText())
             elif isinstance(widget, QSpinBox):
                 cfg.set(SECTION, key, str(widget.value()))
             elif isinstance(widget, QDoubleSpinBox):
@@ -495,9 +477,6 @@ class Configurator(QMainWindow):
             default = VANILLA_DEFAULTS[key]
             if isinstance(widget, QCheckBox):
                 widget.setChecked(default)
-            elif isinstance(widget, QComboBox):
-                idx = widget.findText(default, Qt.MatchFlag.MatchFixedString)
-                widget.setCurrentIndex(max(idx, 0))
             elif isinstance(widget, QSpinBox):
                 widget.setValue(default)
             elif isinstance(widget, QDoubleSpinBox):
@@ -583,7 +562,7 @@ class Configurator(QMainWindow):
         self._workers.append(dll_worker)
 
         # Download configurator.py (self-update)
-        script_path = Path(__file__).resolve() if "__file__" in dir() else Path(sys.argv[0]).resolve()
+        script_path = Path(sys.argv[0]).resolve()
         cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
         cfg_worker.finished.connect(lambda p: self._on_script_updated(p))
         cfg_worker.error.connect(lambda e: self._on_update_error("Configurator", e))

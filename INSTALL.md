@@ -1,22 +1,49 @@
 # SwornTweaks Installation Guide
 
-## Mod Installation (required)
+## 1. Install MelonLoader (required first)
+
+MelonLoader is the mod framework that loads SwornTweaks into SWORN. You need to install it before using any mods.
+
+### Windows
+
+1. Go to the [MelonLoader Releases](https://github.com/LavaGang/MelonLoader/releases) page
+2. Download `MelonLoader.Installer.exe`
+3. Run the installer:
+   - Click **Select** and browse to your SWORN executable:
+     `C:\Program Files (x86)\Steam\steamapps\common\SWORN\SWORN.exe`
+     (or wherever Steam installed the game)
+   - Make sure **Latest** version is selected
+   - Click **Install**
+4. Launch SWORN once — MelonLoader will set up its folders (`Mods/`, `UserData/`, etc.) on first run. The game may take longer to start the first time. You can close it after you see the main menu.
+
+### Linux (Steam Proton)
+
+MelonLoader works through Proton but requires a DLL override:
+
+1. Download `MelonLoader.x64.zip` from the [MelonLoader Releases](https://github.com/LavaGang/MelonLoader/releases) page
+2. Find your SWORN game folder:
+   - Default: `~/.steam/steam/steamapps/common/SWORN/`
+   - Custom library: check your Steam library path, e.g. `/mnt/<drive>/SteamLibrary/steamapps/common/SWORN/`
+3. Extract the zip into the SWORN game folder — you should see a `MelonLoader/` folder and `version.dll` next to `SWORN.exe`
+4. In Steam, right-click SWORN → **Properties** → **General** → **Launch Options** and add:
+   ```
+   WINEDLLOVERRIDES="version=n,b" %command%
+   ```
+5. Launch SWORN once to let MelonLoader create its folders (`Mods/`, `UserData/`). Close after the main menu appears.
+
+---
+
+## 2. Install SwornTweaks
 
 1. Download `SwornTweaks.dll` from the [latest release](https://github.com/jj-repository/SwornTweaks/releases) or the repo root
 2. Copy `SwornTweaks.dll` into your SWORN game's `Mods/` folder:
    - **Windows**: `C:\Program Files (x86)\Steam\steamapps\common\SWORN\Mods\`
    - **Linux**: `~/.steam/steam/steamapps/common/SWORN/Mods/` (or your custom Steam library path)
-3. Make sure [MelonLoader](https://melonwiki.xyz/) is installed for SWORN
-4. Launch the game — the config file is created automatically at `SWORN/UserData/MelonPreferences.cfg`
-
-**Linux (Proton)**: Add this to SWORN's Steam launch options:
-```
-WINEDLLOVERRIDES="version=n,b" %command%
-```
+3. Launch the game — the config file is created automatically at `SWORN/UserData/MelonPreferences.cfg`
 
 ---
 
-## Configurator GUI Installation
+## 3. Configurator GUI (optional)
 
 The configurator is a visual editor for the mod's settings. It's optional — you can also edit `MelonPreferences.cfg` by hand.
 

@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build Release
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,11 +26,65 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SwornTweaks-Configurator
+          name: SwornTweaks-Configurator-Windows
           path: dist/SwornTweaks-Configurator.exe
 
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon0
+
+      - name: Install Python dependencies
+        run: pip install PyQt6 pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile --windowed --name SwornTweaks-Configurator configurator.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwornTweaks-Configurator-Linux
+          path: dist/SwornTweaks-Configurator
+
+  release:
+    needs: [build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SwornTweaks-Configurator-Windows
+          path: release/
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SwornTweaks-Configurator-Linux
+          path: release/
+
+      - name: Rename Linux binary
+        run: mv release/SwornTweaks-Configurator release/SwornTweaks-Configurator-Linux
+
       - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/SwornTweaks-Configurator.exe
+          files: |
+            release/SwornTweaks-Configurator.exe
+            release/SwornTweaks-Configurator-Linux
+            SwornTweaks.dll
+            configurator.py
