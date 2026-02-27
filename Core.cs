@@ -28,9 +28,13 @@ namespace SwornTweaks
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             if (!Config.InfiniteRerolls.Value) return;
-            var rm = RerollPatch.Instance;
-            if (rm == null) return;
-            rm.baseRerolls = 500;
+            try
+            {
+                Il2Cpp.RerollManager.SetRerolls(500);
+                var rm = RerollPatch.Instance;
+                if (rm != null) rm.baseRerolls = 500;
+            }
+            catch { /* RerollManager not ready yet — RerollPatch Postfix handles it */ }
         }
     }
 }

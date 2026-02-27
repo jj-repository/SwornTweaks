@@ -24,5 +24,13 @@ namespace SwornTweaks.Patches
             __instance.baseRerolls = _vanillaBaseRerolls + bonus;
             MelonLogger.Msg($"[SwornTweaks] Rerolls: +{bonus} (total base: {__instance.baseRerolls})");
         }
+
+        static void Postfix(RerollManager __instance)
+        {
+            if (!Config.InfiniteRerolls.Value) return;
+            __instance.baseRerolls = 500;
+            RerollManager.SetRerolls(500);
+            MelonLogger.Msg("[SwornTweaks] Infinite rerolls: set to 500");
+        }
     }
 }

@@ -14,8 +14,12 @@ namespace SwornTweaks.Patches
         // if SetMobDifficultyScaling is called more than once per mob
         internal static readonly HashSet<int> _modified = new();
 
-        // Cached biome lookup
+        // Cached lookups for debug logging
         private static ExpeditionManager _cachedEM;
+        private static DifficultyManager _cachedDM;
+        private static BorealisGamemode _cachedGM;
+        internal static bool _headerLogged;
+
         private static string GetCurrentBiome()
         {
             try
@@ -28,38 +32,55 @@ namespace SwornTweaks.Patches
             catch { return "?"; }
         }
 
+        private static string GetSessionInfo()
+        {
+            try
+            {
+                if (_cachedDM == null)
+                    _cachedDM = UnityEngine.Object.FindObjectOfType<DifficultyManager>();
+                if (_cachedGM == null)
+                    _cachedGM = UnityEngine.Object.FindObjectOfType<BorealisGamemode>();
+
+                string diff = _cachedDM?.CurrentDifficultyLevel.ToString() ?? "?";
+                int players = 1;
+                try { players = _cachedGM?.players?.Count ?? 1; } catch { }
+                return $"diff={diff} players={players}";
+            }
+            catch { return "diff=? players=?"; }
+        }
+
         static void Postfix(Mob __instance)
         {
             int id = __instance.GetInstanceID();
             if (!_modified.Add(id)) return;
 
+            // Log session header once per run
+            if (!_headerLogged)
+            {
+                _headerLogged = true;
+                MelonLogger.Msg($"[SwornTweaks] [HP] === SESSION: {GetSessionInfo()} ===");
+            }
+
             var health = __instance.HealthStats?.HealthMultiplier;
             var hs = __instance.HealthStats;
             string mobType = __instance.MobStats?.Type.ToString() ?? "Unknown";
+            string biome = GetCurrentBiome();
+            float baseMax = hs?.BaseMax ?? 0;
+            float max = hs?.Max ?? 0;
 
             if (__instance.IsBoss)
             {
                 if (Config.BossHealthMultiplier.Value != 1.0f && health != null)
-                {
                     health.AddMod(Config.BossHealthMultiplier.Value);
-                }
-                // Debug: log boss HP
-                float baseMax = hs?.BaseMax ?? 0;
-                float max = hs?.Max ?? 0;
-                string biome = GetCurrentBiome();
-                MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | mult={Config.BossHealthMultiplier.Value}x");
+                float maxAfter = hs?.Max ?? 0;
+                MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | mult={Config.BossHealthMultiplier.Value}x");
             }
             else if (__instance.IsMajorEnemy)
             {
                 if (Config.BeastHealthMultiplier.Value != 1.0f && health != null)
-                {
                     health.AddMod(Config.BeastHealthMultiplier.Value);
-                }
-                // Debug: log beast HP
-                float baseMax = hs?.BaseMax ?? 0;
-                float max = hs?.Max ?? 0;
-                string biome = GetCurrentBiome();
-                MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | mult={Config.BeastHealthMultiplier.Value}x");
+                float maxAfter = hs?.Max ?? 0;
+                MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | mult={Config.BeastHealthMultiplier.Value}x");
             }
             else
             {
@@ -69,11 +90,6 @@ namespace SwornTweaks.Patches
                     health.AddMod(hp);
                 if (dmg != 1.0f)
                     __instance.CombatStats?.AttackMultiplier?.AddMod(dmg);
-
-                // Debug: log normal enemy HP
-                float baseMax = hs?.BaseMax ?? 0;
-                float max = hs?.Max ?? 0;
-                string biome = GetCurrentBiome();
                 MelonLogger.Msg($"[SwornTweaks] [HP] MOB {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0}");
             }
         }
@@ -86,6 +102,7 @@ namespace SwornTweaks.Patches
         static void Prefix()
         {
             HealthBoostPatch._modified.Clear();
+            HealthBoostPatch._headerLogged = false;
         }
     }
 }
