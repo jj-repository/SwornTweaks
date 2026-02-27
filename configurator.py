@@ -29,33 +29,6 @@ SECTION = "SwornTweaks"
 MAX_FIXED_ROOM = 12
 
 # Mod defaults — what the mod ships with on first run
-DEFAULTS = {
-    "BonusRerolls": 50,
-    "InfiniteRerolls": False,
-    "LegendaryChance": 0.03,
-    "EpicChance": 0.08,
-    "RareChance": 0.20,
-    "UncommonChance": 0.25,
-    "NoGemCost": True,
-    "NoCurrencyDoorRewards": True,
-    "DuoChance": 0.35,
-    "ExtraBiomes": 1,
-    "RandomizeRepeats": False,
-    "AllBiomesRandom": False,
-    "BeastChancePercent": 0.0,
-    "MaxBeastsPerBiome": 5,
-    "BeastRoom1": 4,
-    "BeastRoom2": 8,
-    "BossHealthMultiplier": 2.0,
-    "BeastHealthMultiplier": 2.0,
-    "IntensityMultiplier": 1.0,
-    "PlayerHealthMultiplier": 1.0,
-    "EnemyHealthMultiplier": 1.0,
-    "EnemyDamageMultiplier": 1.0,
-    "ChaosMode": False,
-}
-
-# Vanilla game defaults — what the unmodded game uses
 VANILLA_DEFAULTS = {
     "BonusRerolls": 0,
     "InfiniteRerolls": False,
@@ -69,6 +42,7 @@ VANILLA_DEFAULTS = {
     "ExtraBiomes": 0,
     "RandomizeRepeats": False,
     "AllBiomesRandom": False,
+    "UseVanillaBeastSettings": True,
     "BeastChancePercent": 0.0,
     "MaxBeastsPerBiome": 5,
     "BeastRoom1": -1,
@@ -81,6 +55,9 @@ VANILLA_DEFAULTS = {
     "EnemyDamageMultiplier": 1.0,
     "ChaosMode": False,
 }
+
+# Keys for beast section that get disabled when UseVanillaBeastSettings is checked
+_BEAST_KEYS = ("BeastChancePercent", "MaxBeastsPerBiome", "BeastRoom1", "BeastRoom2")
 
 _DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
 
@@ -245,7 +222,8 @@ class Configurator(QMainWindow):
         left.addStretch()
 
         # ── Center column ─────────────────────────────────────────
-        center.addWidget(self._group("Beast Rooms", [
+        center.addWidget(self._group("Beast Boss Room Spawns", [
+            self._bool_row("UseVanillaBeastSettings", "Use Vanilla Beast Settings"),
             self._pct_row("BeastChancePercent", "Random Chance", 0, 100),
             self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15),
             self._int_row("BeastRoom1", "Fixed Beast Room 1", -1, MAX_FIXED_ROOM),
@@ -324,6 +302,11 @@ class Configurator(QMainWindow):
         outer.addLayout(bottom)
         self.setCentralWidget(central)
         self._load()
+
+        # Wire up the vanilla beast checkbox to disable/enable beast fields
+        vanilla_cb = self.widgets["UseVanillaBeastSettings"]
+        vanilla_cb.stateChanged.connect(self._on_vanilla_beast_toggled)
+        self._on_vanilla_beast_toggled(vanilla_cb.checkState().value)
 
     # ── Game path ────────────────────────────────────────────────
 
@@ -425,6 +408,21 @@ class Configurator(QMainWindow):
         lbl.setStyleSheet("color: gray; font-size: 11px;")
         lbl.setWordWrap(True)
         return lbl
+
+    # ── Beast vanilla toggle ────────────────────────────────────
+
+    def _on_vanilla_beast_toggled(self, _state):
+        """Disable beast fields when Use Vanilla Beast Settings is checked."""
+        checked = self.widgets["UseVanillaBeastSettings"].isChecked()
+        for key in _BEAST_KEYS:
+            w = self.widgets[key]
+            w.setEnabled(not checked)
+            if checked:
+                default = VANILLA_DEFAULTS[key]
+                if isinstance(w, QSpinBox):
+                    w.setValue(default)
+                elif isinstance(w, QDoubleSpinBox):
+                    w.setValue(self._cfg_to_display(key, default))
 
     # ── Percentage helpers ───────────────────────────────────────
 

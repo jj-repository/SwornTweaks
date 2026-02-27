@@ -38,6 +38,8 @@ namespace SwornTweaks.Patches
 
         static void Postfix(ref ObjectiveType __result, BiomeData biome)
         {
+            if (Config.UseVanillaBeastSettings.Value) return;
+
             var bt = biome != null ? biome.GetBiomeType() : BeastRoomTracker.CurrentBiome;
             if (bt == BiomeType.Camelot || bt == BiomeType.Somewhere)
                 return;

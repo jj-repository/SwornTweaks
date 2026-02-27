@@ -74,14 +74,15 @@ Extra biomes are inserted after the original 3 combat biomes (Kingswood, Cornuco
 
 With `RandomizeRepeats`, each extra slot is randomly picked from the 3 combat biomes. With `AllBiomesRandom`, all combat biome slots (original + extras) are fully randomized — DeepHarbor could be first, Kingswood could appear twice, etc. Camelot and Somewhere always remain at the end.
 
-### Beast Rooms
+### Beast Boss Room Spawns
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `UseVanillaBeastSettings` | `true` | Use vanilla beast spawning (ignores all settings below) |
 | `BeastChancePercent` | `0` | % chance per room for a Legendary Beast fight (0 = disabled) |
 | `MaxBeastsPerBiome` | `5` | Max random beast encounters per biome (fixed rooms don't count) |
-| `BeastRoom1` | `4` | Fixed beast boss at this room index (-1 = off, max 12) |
-| `BeastRoom2` | `8` | Fixed beast boss at this room index (-1 = off, max 12) |
+| `BeastRoom1` | `-1` | Fixed beast boss at this room index (-1 = off, max 12) |
+| `BeastRoom2` | `-1` | Fixed beast boss at this room index (-1 = off, max 12) |
 
 Room indices are 0-based within each biome. Room counts: Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12). Fixed rooms always trigger; random chance only replaces normal combat rooms and respects the per-biome cap.
 
@@ -139,10 +140,11 @@ DuoChance = 0.35
 ExtraBiomes = 1
 RandomizeRepeats = false
 AllBiomesRandom = false
+UseVanillaBeastSettings = true
 BeastChancePercent = 0
 MaxBeastsPerBiome = 5
-BeastRoom1 = 4
-BeastRoom2 = 8
+BeastRoom1 = -1
+BeastRoom2 = -1
 PlayerHealthMultiplier = 1
 BossHealthMultiplier = 2
 BeastHealthMultiplier = 2

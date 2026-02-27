@@ -31,6 +31,7 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<bool> AllBiomesRandom = null!;
 
         // Beast rooms
+        internal static MelonPreferences_Entry<bool> UseVanillaBeastSettings = null!;
         internal static MelonPreferences_Entry<float> BeastChancePercent = null!;
         internal static MelonPreferences_Entry<int> MaxBeastsPerBiome = null!;
         internal static MelonPreferences_Entry<int> BeastRoom1 = null!;
@@ -87,13 +88,16 @@ namespace SwornTweaks
             AllBiomesRandom = _cat.CreateEntry("AllBiomesRandom", false,
                 "Completely randomize all combat biome order");
 
+            UseVanillaBeastSettings = _cat.CreateEntry("UseVanillaBeastSettings", true,
+                "Use vanilla beast spawning (ignores all beast room settings below)");
+
             BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 0.0f,
                 "Percent chance per room for a beast (Legendary Beast) fight (0 = disabled)");
             MaxBeastsPerBiome = _cat.CreateEntry("MaxBeastsPerBiome", 5,
                 "Max random beast encounters per biome (fixed rooms don't count)");
-            BeastRoom1 = _cat.CreateEntry("BeastRoom1", 4,
+            BeastRoom1 = _cat.CreateEntry("BeastRoom1", -1,
                 "Force beast at this 0-based room index (-1 = disabled)");
-            BeastRoom2 = _cat.CreateEntry("BeastRoom2", 8,
+            BeastRoom2 = _cat.CreateEntry("BeastRoom2", -1,
                 "Force beast at this 0-based room index (-1 = disabled)");
 
             BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 2.0f,
