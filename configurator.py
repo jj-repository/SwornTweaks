@@ -10,8 +10,8 @@ import urllib.request
 from configparser import ConfigParser
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap, QFont, QPen
+from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap, QFont, QPen
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -296,6 +296,14 @@ class Configurator(QMainWindow):
         bottom.addWidget(copyright_label)
         bottom.addStretch()
 
+        help_btn = QPushButton("Help")
+        help_btn.clicked.connect(self._open_help)
+        bottom.addWidget(help_btn)
+
+        setcfg_btn = QPushButton("Set .cfg Path")
+        setcfg_btn.clicked.connect(self._set_cfg_path)
+        bottom.addWidget(setcfg_btn)
+
         import_btn = QPushButton("Import Config")
         import_btn.clicked.connect(self._import_config)
         bottom.addWidget(import_btn)
@@ -521,6 +529,34 @@ class Configurator(QMainWindow):
             return
         self._load_from_cfg(p)
         QMessageBox.information(self, "Imported", f"Settings loaded from:\n{p}")
+
+    def _set_cfg_path(self):
+        """Manually select the SWORN game folder (changes where .cfg is read/written)."""
+        d = QFileDialog.getExistingDirectory(self, "Select SWORN Game Folder")
+        if not d:
+            return
+        p = Path(d)
+        cfg_file = p / "UserData" / "MelonPreferences.cfg"
+        if not cfg_file.parent.is_dir():
+            reply = QMessageBox.question(
+                self, "UserData Not Found",
+                f"No UserData/ folder found in:\n{p}\n\n"
+                "Are you sure this is the SWORN game folder?",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self.game_path = p
+        save_game_path(p)
+        self._load()
+        QMessageBox.information(
+            self, "Path Set",
+            f"Game path set to:\n{p}\n\nConfig: {cfg_file}"
+        )
+
+    @staticmethod
+    def _open_help():
+        """Open the README / install instructions on GitHub."""
+        QDesktopServices.openUrl(QUrl(f"https://github.com/{GITHUB_REPO}#readme"))
 
     # ── Update from GitHub ───────────────────────────────────────
 
