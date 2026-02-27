@@ -66,10 +66,10 @@ namespace SwornTweaks.Patches
             }
 
             // Log the final sequence
-            string seq = "";
+            var names = new string[biomes.Count];
             for (int i = 0; i < biomes.Count; i++)
-                seq += (i > 0 ? " -> " : "") + biomes[i]?.GetBiomeType().ToString();
-            MelonLogger.Msg($"[SwornTweaks] Biome sequence ({biomes.Count} biomes): {seq}");
+                names[i] = biomes[i]?.GetBiomeType().ToString() ?? "?";
+            MelonLogger.Msg($"[SwornTweaks] Biome sequence ({biomes.Count}): {string.Join(" -> ", names)}");
         }
     }
 }

@@ -9,31 +9,32 @@ namespace SwornTweaks.Patches
     {
         static void Postfix(Mob __instance)
         {
+            var health = __instance.HealthStats?.HealthMultiplier;
+
             if (__instance.IsBoss)
             {
-                if (Config.BossHealthMultiplier.Value != 1.0f)
+                if (Config.BossHealthMultiplier.Value != 1.0f && health != null)
                 {
-                    __instance.HealthStats.HealthMultiplier.AddMod(Config.BossHealthMultiplier.Value);
-                    MelonLogger.Msg($"[SwornTweaks] {__instance.MobStats?.Type} — applied {Config.BossHealthMultiplier.Value}x boss HP");
+                    health.AddMod(Config.BossHealthMultiplier.Value);
+                    MelonLogger.Msg($"[SwornTweaks] {__instance.MobStats?.Type} — {Config.BossHealthMultiplier.Value}x boss HP");
                 }
             }
             else if (__instance.IsMajorEnemy)
             {
-                if (Config.BeastHealthMultiplier.Value != 1.0f)
+                if (Config.BeastHealthMultiplier.Value != 1.0f && health != null)
                 {
-                    __instance.HealthStats.HealthMultiplier.AddMod(Config.BeastHealthMultiplier.Value);
-                    MelonLogger.Msg($"[SwornTweaks] {__instance.MobStats?.Type} — applied {Config.BeastHealthMultiplier.Value}x beast HP");
+                    health.AddMod(Config.BeastHealthMultiplier.Value);
+                    MelonLogger.Msg($"[SwornTweaks] {__instance.MobStats?.Type} — {Config.BeastHealthMultiplier.Value}x beast HP");
                 }
             }
             else
             {
-                // Normal enemies (not boss, not beast/major enemy)
                 float hp = Config.EnemyHealthMultiplier.Value;
                 float dmg = Config.EnemyDamageMultiplier.Value;
-                if (hp != 1.0f)
-                    __instance.HealthStats.HealthMultiplier.AddMod(hp);
+                if (hp != 1.0f && health != null)
+                    health.AddMod(hp);
                 if (dmg != 1.0f)
-                    __instance.CombatStats.AttackMultiplier.AddMod(dmg);
+                    __instance.CombatStats?.AttackMultiplier?.AddMod(dmg);
             }
         }
     }

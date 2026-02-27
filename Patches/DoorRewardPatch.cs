@@ -9,12 +9,12 @@ namespace SwornTweaks.Patches
     [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
     static class DoorRewardPatch
     {
+        private static readonly Random _rng = new();
+
         static void Postfix(Il2CppReferenceArray<ExpeditionManager.Path> __result)
         {
             if (!Config.NoCurrencyDoorRewards.Value) return;
             if (__result == null) return;
-
-            var rng = new Random();
             for (int i = 0; i < __result.Length; i++)
             {
                 var path = __result[i];
@@ -23,7 +23,7 @@ namespace SwornTweaks.Patches
                 var reward = path.rewardType;
                 if (reward == RewardType.FairyEmber || reward == RewardType.Silk || reward == RewardType.Moonstone)
                 {
-                    path.rewardType = rng.Next(2) == 0 ? RewardType.ParagonLevelUp : RewardType.Paragon;
+                    path.rewardType = _rng.Next(2) == 0 ? RewardType.ParagonLevelUp : RewardType.Paragon;
                 }
             }
         }
