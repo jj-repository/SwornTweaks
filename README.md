@@ -76,10 +76,10 @@ Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`, `Camelot`, `Somewher
 |---------|---------|-------------|
 | `BeastChancePercent` | `0` | % chance per room for a Legendary Beast fight (0 = disabled) |
 | `MaxBeastsPerBiome` | `5` | Max random beast encounters per biome (fixed rooms don't count) |
-| `BeastRoom1` | `4` | Fixed beast boss at this room index (-1 = off, max 13) |
-| `BeastRoom2` | `8` | Fixed beast boss at this room index (-1 = off, max 13) |
+| `BeastRoom1` | `4` | Fixed beast boss at this room index (-1 = off, max 12) |
+| `BeastRoom2` | `8` | Fixed beast boss at this room index (-1 = off, max 12) |
 
-Room indices are 0-based within each biome. The last room is always a boss fight and cannot be overridden. Room counts: Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12). Fixed rooms always trigger; random chance only replaces normal combat rooms and respects the per-biome cap.
+Room indices are 0-based within each biome. Room counts: Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12). Fixed rooms always trigger; random chance only replaces normal combat rooms and respects the per-biome cap.
 
 ### Health Multipliers
 
@@ -95,6 +95,14 @@ Room indices are 0-based within each biome. The last room is always a boss fight
 | `IntensityMultiplier` | `1.0` | Global room intensity multiplier (higher = harder spawns) |
 
 Multiplies the result of `BiomeData.GetRoomIntensity`. Affects enemy spawn density/difficulty across all biomes.
+
+### Blessing Selection
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ChaosMode` | `false` | Bypass all blessing prerequisites — any blessing can appear at any banner |
+
+When enabled, every blessing is treated as valid regardless of its prerequisite requirements. This means you can get any blessing from the god you selected without needing dependent blessings first.
 
 ## Example Config
 
@@ -119,6 +127,7 @@ BeastRoom2 = 8
 BossHealthMultiplier = 2
 BeastHealthMultiplier = 2
 IntensityMultiplier = 1
+ChaosMode = false
 ```
 
 ## Supersedes

@@ -8,8 +8,10 @@ namespace SwornTweaks.Patches
     {
         static void Postfix(BlessingGenerator.BlessingClassification classification, ref float __result)
         {
+            float chance = Config.DuoChance.Value;
+            if (chance <= 0f) return; // 0 = vanilla behavior
             if (classification == BlessingGenerator.BlessingClassification.Duo)
-                __result = Config.DuoChance.Value;
+                __result = chance;
         }
     }
 }

@@ -43,6 +43,9 @@ namespace SwornTweaks
         // Intensity
         internal static MelonPreferences_Entry<float> IntensityMultiplier = null!;
 
+        // Blessing selection
+        internal static MelonPreferences_Entry<bool> ChaosMode = null!;
+
         internal static void Init()
         {
             _cat = MelonPreferences.CreateCategory("SwornTweaks");
@@ -93,6 +96,9 @@ namespace SwornTweaks
 
             IntensityMultiplier = _cat.CreateEntry("IntensityMultiplier", 1.0f,
                 "Global room intensity multiplier (1.0 = no change, higher = harder spawns)");
+
+            ChaosMode = _cat.CreateEntry("ChaosMode", false,
+                "Bypass all blessing prerequisite checks (any blessing can appear at any banner)");
         }
     }
 }

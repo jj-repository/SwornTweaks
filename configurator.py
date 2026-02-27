@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
@@ -26,10 +26,10 @@ GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
 BIOMES = ["Kingswood", "Cornucopia", "DeepHarbor", "Camelot", "Somewhere"]
 
-# Room counts per biome (from game data): last room is boss, not selectable
-# Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12), Camelot=4 (0-3)
-MAX_FIXED_ROOM = 13  # highest non-boss room across all biomes (Kingswood room 13)
+# Highest selectable room index across biomes
+MAX_FIXED_ROOM = 12
 
+# Mod defaults — what the mod ships with on first run
 DEFAULTS = {
     "BonusRerolls": 50,
     "InfiniteRerolls": False,
@@ -50,6 +50,31 @@ DEFAULTS = {
     "BossHealthMultiplier": 2.0,
     "BeastHealthMultiplier": 2.0,
     "IntensityMultiplier": 1.0,
+    "ChaosMode": False,
+}
+
+# Vanilla game defaults — what the unmodded game uses
+VANILLA_DEFAULTS = {
+    "BonusRerolls": 0,
+    "InfiniteRerolls": False,
+    "LegendaryChance": 0.03,
+    "EpicChance": 0.08,
+    "RareChance": 0.20,
+    "UncommonChance": 0.25,
+    "NoGemCost": False,
+    "NoCurrencyDoorRewards": False,
+    "DuoChance": 0.0,
+    "EnableBiomeRepeat": False,
+    "RepeatBiome": "Kingswood",
+    "RepeatAfterBiome": "Cornucopia",
+    "BeastChancePercent": 0.0,
+    "MaxBeastsPerBiome": 5,
+    "BeastRoom1": -1,
+    "BeastRoom2": -1,
+    "BossHealthMultiplier": 1.0,
+    "BeastHealthMultiplier": 1.0,
+    "IntensityMultiplier": 1.0,
+    "ChaosMode": False,
 }
 
 _DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
@@ -164,7 +189,7 @@ class Configurator(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"SwornTweaks Configurator v{VERSION}")
         self.setWindowIcon(make_icon())
-        self.setMinimumWidth(720)
+        self.setMinimumWidth(960)
         self.widgets: dict[str, QWidget] = {}
         self._workers: list[DownloadWorker] = []
 
@@ -178,9 +203,10 @@ class Configurator(QMainWindow):
         central = QWidget()
         outer = QVBoxLayout(central)
 
-        # Two-column layout
+        # Three-column layout
         columns = QHBoxLayout()
         left = QVBoxLayout()
+        center = QVBoxLayout()
         right = QVBoxLayout()
 
         # ── Left column ──────────────────────────────────────────
@@ -202,25 +228,28 @@ class Configurator(QMainWindow):
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
         ]))
 
-        left.addWidget(self._group("Intensity", [
-            self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
+        left.addWidget(self._group("Blessing Selection", [
+            self._bool_row("ChaosMode", "Chaos Mode"),
+            self._label_row("Bypass all blessing prerequisites —\nevery blessing can appear at any banner"),
         ]))
 
         left.addStretch()
 
-        # ── Right column ─────────────────────────────────────────
-        right.addWidget(self._group("Biome Repeat", [
+        # ── Center column (Biome Repeat — will be extended) ───────
+        center.addWidget(self._group("Biome Repeat", [
             self._bool_row("EnableBiomeRepeat", "Enable Biome Repeat"),
             self._combo_row("RepeatBiome", "Repeat Biome", BIOMES),
             self._combo_row("RepeatAfterBiome", "Repeat After", BIOMES),
         ]))
 
+        center.addStretch()
+
+        # ── Right column ─────────────────────────────────────────
         right.addWidget(self._group("Beast Rooms", [
             self._pct_row("BeastChancePercent", "Random Chance", 0, 100),
             self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15),
-            self._int_row("BeastRoom1", "Fixed Beast Boss 1", -1, MAX_FIXED_ROOM),
-            self._int_row("BeastRoom2", "Fixed Beast Boss 2", -1, MAX_FIXED_ROOM),
-            self._label_row("(-1 = off, max 13, last room is boss)"),
+            self._int_row("BeastRoom1", "Fixed Beast Room 1", -1, MAX_FIXED_ROOM),
+            self._int_row("BeastRoom2", "Fixed Beast Room 2", -1, MAX_FIXED_ROOM),
         ]))
 
         right.addWidget(self._group("Health Multipliers", [
@@ -228,9 +257,15 @@ class Configurator(QMainWindow):
             self._float_row("BeastHealthMultiplier", "Beast Health", 0.1, 50.0, "x"),
         ]))
 
+        right.addWidget(self._group("Intensity", [
+            self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
+            self._label_row("Scales enemy spawn density and difficulty.\n1.0 = normal, 2.0 = double spawns."),
+        ]))
+
         right.addStretch()
 
         columns.addLayout(left)
+        columns.addLayout(center)
         columns.addLayout(right)
         outer.addLayout(columns)
 
@@ -245,7 +280,7 @@ class Configurator(QMainWindow):
         update_btn.clicked.connect(self._update_from_github)
         bottom.addWidget(update_btn)
 
-        reset_btn = QPushButton("Reset Defaults")
+        reset_btn = QPushButton("Reset to Vanilla")
         reset_btn.clicked.connect(self._reset_defaults)
         bottom.addWidget(reset_btn)
 
@@ -356,6 +391,7 @@ class Configurator(QMainWindow):
     def _label_row(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setStyleSheet("color: gray; font-size: 11px;")
+        lbl.setWordWrap(True)
         return lbl
 
     # ── Percentage helpers ───────────────────────────────────────
@@ -420,8 +456,9 @@ class Configurator(QMainWindow):
         QMessageBox.information(self, "Saved", f"Config saved to:\n{self.cfg_path}")
 
     def _reset_defaults(self):
+        """Reset all fields to vanilla game values (unmodded behavior)."""
         for key, widget in self.widgets.items():
-            default = DEFAULTS[key]
+            default = VANILLA_DEFAULTS[key]
             if isinstance(widget, QCheckBox):
                 widget.setChecked(default)
             elif isinstance(widget, QComboBox):
