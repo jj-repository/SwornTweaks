@@ -32,12 +32,16 @@ namespace SwornTweaks
 
         // Beast rooms
         internal static MelonPreferences_Entry<float> BeastChancePercent = null!;
+        internal static MelonPreferences_Entry<int> MaxBeastsPerBiome = null!;
         internal static MelonPreferences_Entry<int> BeastRoom1 = null!;
         internal static MelonPreferences_Entry<int> BeastRoom2 = null!;
 
         // Health multipliers
         internal static MelonPreferences_Entry<float> BossHealthMultiplier = null!;
         internal static MelonPreferences_Entry<float> BeastHealthMultiplier = null!;
+
+        // Intensity
+        internal static MelonPreferences_Entry<float> IntensityMultiplier = null!;
 
         internal static void Init()
         {
@@ -75,6 +79,8 @@ namespace SwornTweaks
 
             BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 0.0f,
                 "Percent chance per room for a beast (Legendary Beast) fight (0 = disabled)");
+            MaxBeastsPerBiome = _cat.CreateEntry("MaxBeastsPerBiome", 5,
+                "Max random beast encounters per biome (fixed rooms don't count)");
             BeastRoom1 = _cat.CreateEntry("BeastRoom1", 4,
                 "Force beast at this 0-based room index (-1 = disabled)");
             BeastRoom2 = _cat.CreateEntry("BeastRoom2", 8,
@@ -84,6 +90,9 @@ namespace SwornTweaks
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");
             BeastHealthMultiplier = _cat.CreateEntry("BeastHealthMultiplier", 2.0f,
                 "Health multiplier for legendary beasts like Dagonet (1.0 = no change)");
+
+            IntensityMultiplier = _cat.CreateEntry("IntensityMultiplier", 1.0f,
+                "Global room intensity multiplier (1.0 = no change, higher = harder spawns)");
         }
     }
 }

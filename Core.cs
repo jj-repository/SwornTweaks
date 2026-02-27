@@ -18,8 +18,9 @@ namespace SwornTweaks
             LoggerInstance.Msg($"  NoCurrencyDoorRewards: {Config.NoCurrencyDoorRewards.Value}");
             LoggerInstance.Msg($"  DuoChance: {Config.DuoChance.Value}");
             LoggerInstance.Msg($"  BiomeRepeat: {Config.EnableBiomeRepeat.Value} ({Config.RepeatBiome.Value} after {Config.RepeatAfterBiome.Value})");
-            LoggerInstance.Msg($"  BeastChance: {Config.BeastChancePercent.Value}%, Hardset: [{Config.BeastRoom1.Value}, {Config.BeastRoom2.Value}]");
+            LoggerInstance.Msg($"  BeastChance: {Config.BeastChancePercent.Value}% (max {Config.MaxBeastsPerBiome.Value}/biome), Fixed: [{Config.BeastRoom1.Value}, {Config.BeastRoom2.Value}]");
             LoggerInstance.Msg($"  BossHP: {Config.BossHealthMultiplier.Value}x, BeastHP: {Config.BeastHealthMultiplier.Value}x");
+            LoggerInstance.Msg($"  Intensity: {Config.IntensityMultiplier.Value}x");
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)

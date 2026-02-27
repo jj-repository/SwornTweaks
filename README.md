@@ -1,27 +1,28 @@
 # SwornTweaks
 
-All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, door reward replacement, duo boost, biome repeat, random beast rooms, and boss/beast health multipliers. Everything is configurable.
+All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, door reward replacement, duo boost, biome repeat, random beast rooms, boss/beast health multipliers, and intensity scaling. Everything is configurable.
 
 ## Installation
 
-1. Build: `dotnet build -c Release`
-2. Copy `bin/Release/net6.0/SwornTweaks.dll` to `SWORN/Mods/`
-3. Remove any old individual mod DLLs (SwornRerollMod, SwornRarityMod, SwornNoGemCost, SwornNoCurrencyDoorRewards, SwornDuoBoost, SwornMoreRooms)
-4. Launch the game — config file is created automatically
+See [INSTALL.md](INSTALL.md) for detailed setup instructions (Windows + Linux).
+
+Quick start:
+1. Copy `SwornTweaks.dll` to `SWORN/Mods/`
+2. Launch the game — config file is created automatically
 
 ## Configurator GUI
 
-A visual config editor is included — no need to edit the cfg file by hand:
+A visual config editor with auto-update from GitHub:
 
 ```bash
 python3 configurator.py
 ```
 
-All settings can be adjusted with spinboxes, checkboxes, and dropdowns. Click **Save** to write to the cfg file.
+See [INSTALL.md](INSTALL.md) for setup. Windows standalone `.exe` available in [Releases](https://github.com/jj-repository/SwornTweaks/releases).
 
 ## Configuration
 
-Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTweaks]` section. Changes take effect on the next run start (no game restart needed for most settings).
+Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTweaks]` section. Changes take effect on the next run start.
 
 ### Rerolls
 
@@ -74,10 +75,11 @@ Valid biome names: `Kingswood`, `Cornucopia`, `DeepHarbor`, `Camelot`, `Somewher
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `BeastChancePercent` | `0` | % chance per room for a Legendary Beast fight (0 = disabled) |
-| `BeastRoom1` | `4` | Force beast at this 0-based room index (-1 = disabled) |
-| `BeastRoom2` | `8` | Force beast at this 0-based room index (-1 = disabled) |
+| `MaxBeastsPerBiome` | `5` | Max random beast encounters per biome (fixed rooms don't count) |
+| `BeastRoom1` | `4` | Fixed beast boss at this room index (-1 = off, max 13) |
+| `BeastRoom2` | `8` | Fixed beast boss at this room index (-1 = off, max 13) |
 
-Beast rooms spawn randomly in Kingswood, Cornucopia, and DeepHarbor. They are skipped in Camelot and Somewhere. Only normal combat rooms (Default, Wave, Horde, Onslaught) can be replaced by random chance. Hardset rooms always trigger regardless of objective type.
+Room indices are 0-based within each biome. The last room is always a boss fight and cannot be overridden. Room counts: Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12). Fixed rooms always trigger; random chance only replaces normal combat rooms and respects the per-biome cap.
 
 ### Health Multipliers
 
@@ -85,6 +87,14 @@ Beast rooms spawn randomly in Kingswood, Cornucopia, and DeepHarbor. They are sk
 |---------|---------|-------------|
 | `BossHealthMultiplier` | `2.0` | Health multiplier for bosses like Gawain, Arthur (1.0 = no change) |
 | `BeastHealthMultiplier` | `2.0` | Health multiplier for legendary beasts like Dagonet (1.0 = no change) |
+
+### Intensity
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `IntensityMultiplier` | `1.0` | Global room intensity multiplier (higher = harder spawns) |
+
+Multiplies the result of `BiomeData.GetRoomIntensity`. Affects enemy spawn density/difficulty across all biomes.
 
 ## Example Config
 
@@ -103,10 +113,12 @@ EnableBiomeRepeat = true
 RepeatBiome = Kingswood
 RepeatAfterBiome = Cornucopia
 BeastChancePercent = 0
+MaxBeastsPerBiome = 5
 BeastRoom1 = 4
 BeastRoom2 = 8
 BossHealthMultiplier = 2
 BeastHealthMultiplier = 2
+IntensityMultiplier = 1
 ```
 
 ## Supersedes

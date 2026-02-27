@@ -11,18 +11,24 @@ from configparser import ConfigParser
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap, QFont, QPen
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 GITHUB_REPO = "jj-repository/SwornTweaks"
-GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/commits/main"
-GITHUB_DLL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/SwornTweaks.dll"
+GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
+GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
+GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
 BIOMES = ["Kingswood", "Cornucopia", "DeepHarbor", "Camelot", "Somewhere"]
+
+# Room counts per biome (from game data): last room is boss, not selectable
+# Kingswood=15 (0-14), Cornucopia=13 (0-12), DeepHarbor=13 (0-12), Camelot=4 (0-3)
+MAX_FIXED_ROOM = 13  # highest non-boss room across all biomes (Kingswood room 13)
 
 DEFAULTS = {
     "BonusRerolls": 50,
@@ -38,13 +44,45 @@ DEFAULTS = {
     "RepeatBiome": "Kingswood",
     "RepeatAfterBiome": "Cornucopia",
     "BeastChancePercent": 0.0,
+    "MaxBeastsPerBiome": 5,
     "BeastRoom1": 4,
     "BeastRoom2": 8,
     "BossHealthMultiplier": 2.0,
     "BeastHealthMultiplier": 2.0,
+    "IntensityMultiplier": 1.0,
 }
 
 _DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
+
+
+def make_icon() -> QIcon:
+    """Create a simple app icon programmatically."""
+    size = 128
+    pix = QPixmap(size, size)
+    pix.fill(QColor(0, 0, 0, 0))
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # Background circle — dark blue-gray
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(35, 45, 65))
+    p.drawEllipse(4, 4, size - 8, size - 8)
+
+    # Border ring — gold accent
+    pen = QPen(QColor(218, 165, 32))
+    pen.setWidth(3)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(6, 6, size - 12, size - 12)
+
+    # "ST" text
+    p.setPen(QColor(218, 165, 32))
+    font = QFont("Arial", 42, QFont.Weight.Bold)
+    p.setFont(font)
+    p.drawText(pix.rect(), Qt.AlignmentFlag.AlignCenter, "ST")
+
+    p.end()
+    return QIcon(pix)
 
 
 def find_game_path() -> Path | None:
@@ -60,7 +98,6 @@ def find_game_path() -> Path | None:
         home = os.path.expanduser("~")
         candidates.append(f"{home}/.steam/steam/steamapps/common/SWORN")
         candidates.append(f"{home}/.local/share/Steam/steamapps/common/SWORN")
-        # Common custom library locations
         for mount in ("/mnt", "/media", "/run/media"):
             if os.path.isdir(mount):
                 try:
@@ -77,7 +114,6 @@ def find_game_path() -> Path | None:
 
 
 def settings_path() -> Path:
-    """Path to store configurator settings (game path cache)."""
     if platform.system() == "Windows":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
@@ -86,7 +122,6 @@ def settings_path() -> Path:
 
 
 def load_game_path() -> Path | None:
-    """Load cached game path from settings."""
     sp = settings_path()
     if sp.exists():
         try:
@@ -100,26 +135,26 @@ def load_game_path() -> Path | None:
 
 
 def save_game_path(path: Path):
-    """Cache game path to settings."""
     sp = settings_path()
     sp.parent.mkdir(parents=True, exist_ok=True)
     sp.write_text(json.dumps({"game_path": str(path)}))
 
 
-class UpdateWorker(QThread):
-    """Background thread for downloading updates from GitHub."""
+class DownloadWorker(QThread):
+    """Background thread for downloading files from GitHub."""
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, mods_dir: Path):
+    def __init__(self, url: str, dest: Path):
         super().__init__()
-        self.mods_dir = mods_dir
+        self.url = url
+        self.dest = dest
 
     def run(self):
         try:
-            dll_path = self.mods_dir / "SwornTweaks.dll"
-            urllib.request.urlretrieve(GITHUB_DLL, str(dll_path))
-            self.finished.emit(str(dll_path))
+            self.dest.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(self.url, str(self.dest))
+            self.finished.emit(str(self.dest))
         except Exception as e:
             self.error.emit(str(e))
 
@@ -128,9 +163,10 @@ class Configurator(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"SwornTweaks Configurator v{VERSION}")
-        self.setMinimumWidth(700)
+        self.setWindowIcon(make_icon())
+        self.setMinimumWidth(720)
         self.widgets: dict[str, QWidget] = {}
-        self._update_worker: UpdateWorker | None = None
+        self._workers: list[DownloadWorker] = []
 
         # Resolve game path
         self.game_path = load_game_path() or find_game_path()
@@ -166,6 +202,10 @@ class Configurator(QMainWindow):
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
         ]))
 
+        left.addWidget(self._group("Intensity", [
+            self._float_row("IntensityMultiplier", "Room Intensity", 0.1, 10.0, "x"),
+        ]))
+
         left.addStretch()
 
         # ── Right column ─────────────────────────────────────────
@@ -177,8 +217,10 @@ class Configurator(QMainWindow):
 
         right.addWidget(self._group("Beast Rooms", [
             self._pct_row("BeastChancePercent", "Random Chance", 0, 100),
-            self._int_row("BeastRoom1", "Hardset Room 1", -1, 20),
-            self._int_row("BeastRoom2", "Hardset Room 2", -1, 20),
+            self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15),
+            self._int_row("BeastRoom1", "Fixed Beast Boss 1", -1, MAX_FIXED_ROOM),
+            self._int_row("BeastRoom2", "Fixed Beast Boss 2", -1, MAX_FIXED_ROOM),
+            self._label_row("(-1 = off, max 13, last room is boss)"),
         ]))
 
         right.addWidget(self._group("Health Multipliers", [
@@ -192,7 +234,7 @@ class Configurator(QMainWindow):
         columns.addLayout(right)
         outer.addLayout(columns)
 
-        # Bottom bar: copyright left, buttons right
+        # Bottom bar
         bottom = QHBoxLayout()
         copyright_label = QLabel("\u00a9 JJ")
         copyright_label.setStyleSheet("color: gray;")
@@ -213,7 +255,6 @@ class Configurator(QMainWindow):
         bottom.addWidget(save_btn)
 
         outer.addLayout(bottom)
-
         self.setCentralWidget(central)
         self._load()
 
@@ -242,11 +283,14 @@ class Configurator(QMainWindow):
 
     # ── Widget builders ──────────────────────────────────────────
 
-    def _group(self, title: str, rows: list[QHBoxLayout]) -> QGroupBox:
+    def _group(self, title: str, rows: list) -> QGroupBox:
         box = QGroupBox(title)
         vbox = QVBoxLayout()
         for row in rows:
-            vbox.addLayout(row)
+            if isinstance(row, QHBoxLayout):
+                vbox.addLayout(row)
+            elif isinstance(row, QWidget):
+                vbox.addWidget(row)
         box.setLayout(vbox)
         return box
 
@@ -308,6 +352,11 @@ class Configurator(QMainWindow):
         self.widgets[key] = combo
         row.addWidget(combo)
         return row
+
+    def _label_row(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet("color: gray; font-size: 11px;")
+        return lbl
 
     # ── Percentage helpers ───────────────────────────────────────
 
@@ -387,35 +436,55 @@ class Configurator(QMainWindow):
 
     def _update_from_github(self):
         if not self.mods_path:
-            QMessageBox.warning(self, "Error", "No game path set. Cannot update.")
+            QMessageBox.warning(self, "Error", "No game path set.")
             return
         if not self.mods_path.is_dir():
             QMessageBox.warning(self, "Error", f"Mods folder not found:\n{self.mods_path}")
             return
 
         reply = QMessageBox.question(
-            self, "Update",
-            f"Download latest SwornTweaks.dll from GitHub and install to:\n{self.mods_path}\n\nProceed?",
+            self, "Update from GitHub",
+            "This will download the latest:\n"
+            "  - SwornTweaks.dll (into Mods/)\n"
+            "  - configurator.py (self-update)\n\n"
+            "Proceed?",
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        self._update_worker = UpdateWorker(self.mods_path)
-        self._update_worker.finished.connect(self._on_update_done)
-        self._update_worker.error.connect(self._on_update_error)
-        self._update_worker.start()
+        # Download DLL
+        dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll")
+        dll_worker.finished.connect(lambda p: self._on_dll_updated(p))
+        dll_worker.error.connect(lambda e: self._on_update_error("DLL", e))
+        self._workers.append(dll_worker)
 
-    def _on_update_done(self, path: str):
-        QMessageBox.information(self, "Updated", f"SwornTweaks.dll updated:\n{path}")
-        self._update_worker = None
+        # Download configurator.py (self-update)
+        script_path = Path(__file__).resolve() if "__file__" in dir() else Path(sys.argv[0]).resolve()
+        cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
+        cfg_worker.finished.connect(lambda p: self._on_script_updated(p))
+        cfg_worker.error.connect(lambda e: self._on_update_error("Configurator", e))
+        self._workers.append(cfg_worker)
 
-    def _on_update_error(self, err: str):
-        QMessageBox.critical(self, "Update Failed", f"Failed to download update:\n{err}")
-        self._update_worker = None
+        dll_worker.start()
+        cfg_worker.start()
+
+    def _on_dll_updated(self, path: str):
+        self.statusBar().showMessage(f"DLL updated: {path}", 5000)
+
+    def _on_script_updated(self, path: str):
+        QMessageBox.information(
+            self, "Updated",
+            f"SwornTweaks.dll and configurator updated.\n\n"
+            f"Restart the configurator to use the new version."
+        )
+
+    def _on_update_error(self, what: str, err: str):
+        QMessageBox.critical(self, "Update Failed", f"Failed to download {what}:\n{err}")
 
 
 def main():
     app = QApplication(sys.argv)
+    app.setWindowIcon(make_icon())
     win = Configurator()
     win.show()
     sys.exit(app.exec())
