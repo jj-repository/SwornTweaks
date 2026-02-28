@@ -207,9 +207,9 @@ Example with 2 beasts and 2 bosses per biome:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ChaosMode` | `false` | Bypass all blessing prerequisites (currently non-functional) |
+| `ChaosMode` | `false` | Bypass all blessing prerequisites (any blessing can appear) |
 
-**Note:** Chaos Mode is currently disabled due to an IL2CPP compatibility issue. The setting exists in the config but has no effect. A future update will implement this via an alternative approach.
+When enabled, all blessing prerequisite checks are bypassed. Blessings that normally require specific other blessings to be owned (RequiredBlessingsAny/All/None) will appear regardless. This applies to all blessing generation paths: standard blessings, leveled blessings, SwordInTheStone paragons, and Kiss Curse blessings.
 
 ## Example Config
 
