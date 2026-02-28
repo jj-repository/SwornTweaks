@@ -9,6 +9,7 @@ import platform
 import sys
 import urllib.request
 from configparser import ConfigParser
+from io import StringIO
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
@@ -628,7 +629,6 @@ class Configurator(QMainWindow):
         if path and path.exists():
             # MelonPreferences.cfg may have stray lines before section headers
             # (e.g. old mod entries). Skip lines before the first [Section].
-            from io import StringIO
             lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
             first_section = next((i for i, l in enumerate(lines) if l.strip().startswith("[")), 0)
             cfg.read_file(StringIO("".join(lines[first_section:])))
@@ -670,7 +670,6 @@ class Configurator(QMainWindow):
         # Preserve any lines before the first section header (e.g. old mod entries)
         preamble = ""
         if self.cfg_path.exists():
-            from io import StringIO
             lines = self.cfg_path.read_text(encoding="utf-8").splitlines(keepends=True)
             first_section = next((i for i, l in enumerate(lines) if l.strip().startswith("[")), 0)
             preamble = "".join(lines[:first_section])
@@ -726,29 +725,6 @@ class Configurator(QMainWindow):
     def _start_game(self):
         """Launch SWORN via Steam."""
         QDesktopServices.openUrl(QUrl("steam://rungameid/1763250"))
-
-    def _set_cfg_path(self):
-        """Manually select the SWORN game folder (changes where .cfg is read/written)."""
-        d = QFileDialog.getExistingDirectory(self, "Select SWORN Game Folder")
-        if not d:
-            return
-        p = Path(d)
-        cfg_file = p / "UserData" / "MelonPreferences.cfg"
-        if not cfg_file.parent.is_dir():
-            reply = QMessageBox.question(
-                self, "UserData Not Found",
-                f"No UserData/ folder found in:\n{p}\n\n"
-                "Are you sure this is the SWORN game folder?",
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-        self.game_path = p
-        save_game_path(p)
-        self._load()
-        QMessageBox.information(
-            self, "Path Set",
-            f"Game path set to:\n{p}\n\nConfig: {cfg_file}"
-        )
 
     @staticmethod
     def _open_help():

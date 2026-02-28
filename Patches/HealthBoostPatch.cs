@@ -15,9 +15,9 @@ namespace SwornTweaks.Patches
         internal static readonly HashSet<int> _modified = new();
 
         // Cached lookups for debug logging
-        private static ExpeditionManager _cachedEM;
-        private static DifficultyManager _cachedDM;
-        private static BorealisGamemode _cachedGM;
+        private static ExpeditionManager? _cachedEM;
+        private static DifficultyManager? _cachedDM;
+        private static BorealisGamemode? _cachedGM;
         internal static bool _headerLogged;
 
         // Progressive HP scaling data

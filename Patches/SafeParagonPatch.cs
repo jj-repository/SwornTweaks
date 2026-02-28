@@ -25,7 +25,7 @@ namespace SwornTweaks.Patches
             return true; // run original
         }
 
-        static Exception Finalizer(Exception __exception, ref ParagonType __result)
+        static Exception? Finalizer(Exception __exception, ref ParagonType __result)
         {
             if (__exception != null)
             {
