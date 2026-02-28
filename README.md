@@ -203,13 +203,6 @@ Example with 2 beasts and 2 bosses per biome:
 - **Camelot**: Roundtable (vanilla) → Arthur
 - **Somewhere**: Direct to Morgana (no gems needed)
 
-### Blessing Selection
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ChaosMode` | `false` | Bypass all blessing prerequisites (any blessing can appear) |
-
-When enabled, all blessing prerequisite checks are bypassed. Blessings that normally require specific other blessings to be owned (RequiredBlessingsAny/All/None) will appear regardless. This applies to all blessing generation paths: standard blessings, leveled blessings, SwordInTheStone paragons, and Kiss Curse blessings.
 
 ## Example Config
 
@@ -249,7 +242,7 @@ BossRushMode = false
 BossRushHornRewards = 1
 BossRushHealPerRoom = 15
 BossRushScaling = 1.25
-ChaosMode = false
+
 ```
 
 ## Supersedes

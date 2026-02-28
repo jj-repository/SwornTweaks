@@ -14,10 +14,10 @@ namespace SwornTweaks.Patches
         // if SetMobDifficultyScaling is called more than once per mob
         internal static readonly HashSet<int> _modified = new();
 
-        // Cached lookups for debug logging
-        private static ExpeditionManager? _cachedEM;
-        private static DifficultyManager? _cachedDM;
-        private static BorealisGamemode? _cachedGM;
+        // Cached lookups for debug logging (internal so HealthBoostReset can clear them)
+        internal static ExpeditionManager? _cachedEM;
+        internal static DifficultyManager? _cachedDM;
+        internal static BorealisGamemode? _cachedGM;
         internal static bool _headerLogged;
 
         // Progressive HP scaling data
@@ -112,8 +112,8 @@ namespace SwornTweaks.Patches
                 MelonLogger.Msg($"[SwornTweaks] [HP] === SESSION: {GetSessionInfo()} ===");
             }
 
-            var health = __instance.HealthStats?.HealthMultiplier;
             var hs = __instance.HealthStats;
+            var health = hs?.HealthMultiplier;
             string mobType = __instance.MobStats?.Type.ToString() ?? "Unknown";
             string biome = GetCurrentBiome();
             float baseMax = hs?.BaseMax ?? 0;
@@ -168,6 +168,9 @@ namespace SwornTweaks.Patches
         {
             HealthBoostPatch._modified.Clear();
             HealthBoostPatch._headerLogged = false;
+            HealthBoostPatch._cachedEM = null;
+            HealthBoostPatch._cachedDM = null;
+            HealthBoostPatch._cachedGM = null;
         }
     }
 }

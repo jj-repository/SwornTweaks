@@ -20,14 +20,14 @@ from PyQt6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
 GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
 
-# Mod defaults — what the mod ships with on first run
+# Vanilla game defaults — unmodded behavior (used by "Reset to Vanilla" button)
 VANILLA_DEFAULTS = {
     "BonusRerolls": 0,
     "InfiniteRerolls": False,
@@ -63,7 +63,7 @@ VANILLA_DEFAULTS = {
     "BossRushHornRewards": 1,
     "BossRushHealPerRoom": 15,
     "BossRushScaling": 1.25,
-    "ChaosMode": False,
+
 }
 
 # Keys managed directly by _on_vanilla_beast_toggled (not via enable checkboxes)
@@ -175,7 +175,16 @@ class DownloadWorker(QThread):
     def run(self):
         try:
             self.dest.parent.mkdir(parents=True, exist_ok=True)
-            urllib.request.urlretrieve(self.url, str(self.dest))
+            tmp = self.dest.with_suffix(self.dest.suffix + ".tmp")
+            urllib.request.urlretrieve(self.url, str(tmp))
+            # On Windows, you can't overwrite a running script, but you CAN
+            # rename it. Move the old file aside, put the new one in place.
+            old = self.dest.with_suffix(self.dest.suffix + ".old")
+            old.unlink(missing_ok=True)
+            if self.dest.exists():
+                self.dest.rename(old)
+            tmp.rename(self.dest)
+            old.unlink(missing_ok=True)
             self.finished.emit(str(self.dest))
         except Exception as e:
             self.error.emit(str(e))
@@ -247,10 +256,6 @@ class Configurator(QMainWindow):
         ])
         left.addWidget(self._toggles_group)
 
-        left.addWidget(self._group("Blessing Selection", [
-            self._bool_row("ChaosMode", "Bypass Blessing Dependencies"),
-            self._label_row("Bypass all blessing prerequisites"),
-        ]))
 
         self._intensity_group = self._group("Spawn Intensity", [
             self._float_row("IntensityMultiplier", "Enemy Spawn Rate", 0.1, 10.0, "x"),
@@ -354,7 +359,7 @@ class Configurator(QMainWindow):
         run_rows.append(self._label_row("Randomizes all 3 combat biome slots\n"
                             "plus extras. Camelot/Somewhere stay last."))
         run_rows.append(self._bool_row("ProgressiveScaling", "Progressive HP Scaling"))
-        run_rows.append(self._float_row("ProgressiveScalingGrowth", "HP Scaling Growth", 1.25, 3.0, "x"))
+        run_rows.append(self._float_row("ProgressiveScalingGrowth", "HP Scaling Growth", 1.0, 3.0, "x"))
         run_rows.append(self._label_row("Scales difficulty for extra or random biomes.\n"
                             "1.0 = no scaling."))
         self._run_length_group = self._group("Increase Run Length", run_rows)
@@ -596,6 +601,11 @@ class Configurator(QMainWindow):
         for grp in (self._toggles_group, self._intensity_group, self._fae_group,
                      self._extra_boss_group, self._run_length_group):
             grp.setEnabled(not rush)
+        # Re-apply sub-control states when rush is turned off
+        if not rush:
+            self._on_vanilla_beast_toggled(None)
+            self._update_beast_enables()
+            self._update_extra_enables()
 
     def _update_beast_enables(self):
         """Update spinbox enable states based on vanilla toggle + individual checkboxes."""
@@ -718,6 +728,7 @@ class Configurator(QMainWindow):
         self._fixed_bosses_cb.setChecked(False)
         self._random_cb.setChecked(False)
         self._extra_cb.setChecked(False)
+        self._on_vanilla_beast_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()
@@ -800,6 +811,7 @@ class Configurator(QMainWindow):
             self._random_cb.setChecked(pairs["_random"] == "1")
         if "_extra" in pairs:
             self._extra_cb.setChecked(pairs["_extra"] == "1")
+        self._on_vanilla_beast_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()

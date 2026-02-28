@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using Il2Cpp;
-using Il2CppInterop.Runtime;
+
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using MelonLoader;
 
@@ -43,10 +43,6 @@ namespace SwornTweaks.Patches
 
             var bt = biome != null ? biome.GetBiomeType() : BiomeType.None;
 
-            // Debug: log room intensity for data gathering
-            var firstPath = __result[0];
-            if (firstPath != null)
-                MelonLogger.Msg($"[SwornTweaks] [ROOM] idx={nextRoomIndex} biome={bt} intensity={firstPath.intensity:F2} type={firstPath.roomType}");
 
             if (Config.UseVanillaBeastSettings.Value) return;
             if (Config.BossRushMode.Value) return; // BossRush handles all room assignment

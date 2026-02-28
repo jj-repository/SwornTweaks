@@ -24,7 +24,7 @@ namespace SwornTweaks
             LoggerInstance.Msg($"  EnemyHP: {Config.EnemyHealthMultiplier.Value}x, EnemyDMG: {Config.EnemyDamageMultiplier.Value}x");
             LoggerInstance.Msg($"  FaeRealms: {Config.GuaranteedFaeRealms.Value}");
             LoggerInstance.Msg($"  BossRush: {Config.BossRushMode.Value}, Horns: {Config.BossRushHornRewards.Value}, Heal: {Config.BossRushHealPerRoom.Value}, Scaling: {Config.BossRushScaling.Value}x");
-            LoggerInstance.Msg($"  ChaosMode: {Config.ChaosMode.Value}");
+
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)

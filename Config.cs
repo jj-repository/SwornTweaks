@@ -70,8 +70,6 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<int> BossRushHealPerRoom = null!;
         internal static MelonPreferences_Entry<float> BossRushScaling = null!;
 
-        // Blessing selection
-        internal static MelonPreferences_Entry<bool> ChaosMode = null!;
 
         internal static void Init()
         {
@@ -161,8 +159,6 @@ namespace SwornTweaks
             BossRushScaling = _cat.CreateEntry("BossRushScaling", 1.25f,
                 "HP multiplier compounding per boss rush room (1.0 = no scaling)");
 
-            ChaosMode = _cat.CreateEntry("ChaosMode", false,
-                "Bypass all blessing prerequisite checks (any blessing can appear at any banner)");
         }
     }
 }
