@@ -19,6 +19,9 @@ namespace SwornTweaks
         // Gem cost
         internal static MelonPreferences_Entry<bool> NoGemCost = null!;
 
+        // Gold
+        internal static MelonPreferences_Entry<bool> UnlimitedGold = null!;
+
         // Door rewards
         internal static MelonPreferences_Entry<bool> NoCurrencyDoorRewards = null!;
 
@@ -29,18 +32,27 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<int> ExtraBiomes = null!;
         internal static MelonPreferences_Entry<bool> RandomizeRepeats = null!;
         internal static MelonPreferences_Entry<bool> AllBiomesRandom = null!;
+        internal static MelonPreferences_Entry<bool> ProgressiveScaling = null!;
+        internal static MelonPreferences_Entry<float> ProgressiveScalingGrowth = null!;
 
         // Beast rooms
         internal static MelonPreferences_Entry<bool> UseVanillaBeastSettings = null!;
+        internal static MelonPreferences_Entry<bool> SpawnBeastBosses = null!;
+        internal static MelonPreferences_Entry<bool> ForceBiomeBoss = null!;
+        internal static MelonPreferences_Entry<int> FixedExtraBosses = null!;
         internal static MelonPreferences_Entry<float> BeastChancePercent = null!;
         internal static MelonPreferences_Entry<int> MaxBeastsPerBiome = null!;
-        internal static MelonPreferences_Entry<int> BeastRoom1 = null!;
-        internal static MelonPreferences_Entry<int> BeastRoom2 = null!;
-        internal static MelonPreferences_Entry<bool> ForceBiomeBoss = null!;
+
+        // Player
+        internal static MelonPreferences_Entry<float> PlayerHealthMultiplier = null!;
 
         // Health multipliers
         internal static MelonPreferences_Entry<float> BossHealthMultiplier = null!;
         internal static MelonPreferences_Entry<float> BeastHealthMultiplier = null!;
+
+        // Damage multipliers (boss/beast)
+        internal static MelonPreferences_Entry<float> BossDamageMultiplier = null!;
+        internal static MelonPreferences_Entry<float> BeastDamageMultiplier = null!;
 
         // Intensity
         internal static MelonPreferences_Entry<float> IntensityMultiplier = null!;
@@ -48,6 +60,15 @@ namespace SwornTweaks
         // Enemy scaling (normal enemies only)
         internal static MelonPreferences_Entry<float> EnemyHealthMultiplier = null!;
         internal static MelonPreferences_Entry<float> EnemyDamageMultiplier = null!;
+
+        // Fae Realms
+        internal static MelonPreferences_Entry<bool> GuaranteedFaeRealms = null!;
+
+        // Boss Rush
+        internal static MelonPreferences_Entry<bool> BossRushMode = null!;
+        internal static MelonPreferences_Entry<int> BossRushHornRewards = null!;
+        internal static MelonPreferences_Entry<int> BossRushHealPerRoom = null!;
+        internal static MelonPreferences_Entry<float> BossRushScaling = null!;
 
         // Blessing selection
         internal static MelonPreferences_Entry<bool> ChaosMode = null!;
@@ -71,7 +92,10 @@ namespace SwornTweaks
                 "Base chance for uncommon blessings");
 
             NoGemCost = _cat.CreateEntry("NoGemCost", true,
-                "Skip the 300 gold gem socket cost");
+                "Skip the 300 gold Lancelot gem socket cost (need 300 gold to see option)");
+
+            UnlimitedGold = _cat.CreateEntry("UnlimitedGold", false,
+                "Make the game think you always have max gold (everything is free)");
 
             NoCurrencyDoorRewards = _cat.CreateEntry("NoCurrencyDoorRewards", true,
                 "Replace currency door rewards (FairyEmber/Silk/Moonstone) with Paragon rewards");
@@ -85,25 +109,37 @@ namespace SwornTweaks
                 "Randomize which biomes are used for extra slots");
             AllBiomesRandom = _cat.CreateEntry("AllBiomesRandom", false,
                 "Completely randomize all combat biome order");
+            ProgressiveScaling = _cat.CreateEntry("ProgressiveScaling", false,
+                "Normalize mob HP by biome slot position (for AllBiomesRandom/ExtraBiomes)");
+            ProgressiveScalingGrowth = _cat.CreateEntry("ProgressiveScalingGrowth", 1.5f,
+                "Scales difficulty for extra or random biomes (1.0 = no scaling)");
 
             UseVanillaBeastSettings = _cat.CreateEntry("UseVanillaBeastSettings", true,
                 "Use vanilla beast spawning (ignores all beast room settings below)");
 
+            SpawnBeastBosses = _cat.CreateEntry("SpawnBeastBosses", true,
+                "Include legendary beasts (mini-bosses) in extra boss room pool");
+            ForceBiomeBoss = _cat.CreateEntry("ForceBiomeBoss", false,
+                "Also include biome end bosses in extra boss room pool");
+            FixedExtraBosses = _cat.CreateEntry("FixedExtraBosses", 0,
+                "Number of guaranteed extra boss rooms per biome (0-3, placed randomly in valid range)");
             BeastChancePercent = _cat.CreateEntry("BeastChancePercent", 0.0f,
                 "Percent chance per room for a beast (Legendary Beast) fight (0 = disabled)");
             MaxBeastsPerBiome = _cat.CreateEntry("MaxBeastsPerBiome", 5,
                 "Max random beast encounters per biome (fixed rooms don't count)");
-            BeastRoom1 = _cat.CreateEntry("BeastRoom1", -1,
-                "Force beast at this 0-based room index (-1 = disabled)");
-            BeastRoom2 = _cat.CreateEntry("BeastRoom2", -1,
-                "Force beast at this 0-based room index (-1 = disabled)");
-            ForceBiomeBoss = _cat.CreateEntry("ForceBiomeBoss", false,
-                "Fixed beast rooms spawn biome end boss instead of mini-boss (experimental)");
+
+            PlayerHealthMultiplier = _cat.CreateEntry("PlayerHealthMultiplier", 1.0f,
+                "Health multiplier for the player character (1.0 = no change)");
 
             BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 2.0f,
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");
             BeastHealthMultiplier = _cat.CreateEntry("BeastHealthMultiplier", 2.0f,
                 "Health multiplier for legendary beasts like Dagonet (1.0 = no change)");
+
+            BossDamageMultiplier = _cat.CreateEntry("BossDamageMultiplier", 1.0f,
+                "Damage multiplier for bosses (1.0 = no change)");
+            BeastDamageMultiplier = _cat.CreateEntry("BeastDamageMultiplier", 1.0f,
+                "Damage multiplier for legendary beasts (1.0 = no change)");
 
             IntensityMultiplier = _cat.CreateEntry("IntensityMultiplier", 1.0f,
                 "Global room intensity multiplier (1.0 = no change, higher = harder spawns)");
@@ -112,6 +148,18 @@ namespace SwornTweaks
                 "Health multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");
             EnemyDamageMultiplier = _cat.CreateEntry("EnemyDamageMultiplier", 1.0f,
                 "Damage multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");
+
+            GuaranteedFaeRealms = _cat.CreateEntry("GuaranteedFaeRealms", false,
+                "Guarantee one Kiss and one Kiss Curse fae portal per run");
+
+            BossRushMode = _cat.CreateEntry("BossRushMode", false,
+                "Structured boss rush: 1 normal room + unique beasts + unique bosses per biome");
+            BossRushHornRewards = _cat.CreateEntry("BossRushHornRewards", 1,
+                "Trove (horn) rewards per boss rush room (0-3)");
+            BossRushHealPerRoom = _cat.CreateEntry("BossRushHealPerRoom", 15,
+                "HP healed after each boss rush room (0 = disabled)");
+            BossRushScaling = _cat.CreateEntry("BossRushScaling", 1.25f,
+                "HP multiplier compounding per boss rush room (1.0 = no scaling)");
 
             ChaosMode = _cat.CreateEntry("ChaosMode", false,
                 "Bypass all blessing prerequisite checks (any blessing can appear at any banner)");

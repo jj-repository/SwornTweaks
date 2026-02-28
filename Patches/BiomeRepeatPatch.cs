@@ -15,6 +15,9 @@ namespace SwornTweaks.Patches
         // (Previous crashes were caused by ChaosModePatch, not this.)
         static void Prefix(ExpeditionManager __instance)
         {
+            // Boss Rush handles its own biome structure — skip extra biomes
+            if (Config.BossRushMode.Value) return;
+
             int extra = Config.ExtraBiomes.Value;
             if (extra <= 0) return;
 

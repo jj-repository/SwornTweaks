@@ -19,14 +19,7 @@ namespace SwornTweaks.Patches
         }
     }
 
-    [HarmonyPatch(typeof(CurrencyManager), nameof(CurrencyManager.GetGold))]
-    static class GemCostPatchGetGold
-    {
-        static void Postfix(ref int __result)
-        {
-            if (!Config.NoGemCost.Value) return;
-            if (__result < 300)
-                __result = 300;
-        }
-    }
+    // GetGold postfix removed — it inflated gold for ALL checks (shops, etc.),
+    // not just the Lancelot gem socket. The AddGold(-300) prefix above is sufficient:
+    // gems are free as long as you have 300 gold for the UI to show the option.
 }
