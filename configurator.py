@@ -248,7 +248,7 @@ class Configurator(QMainWindow):
         left.addWidget(self._toggles_group)
 
         left.addWidget(self._group("Blessing Selection", [
-            self._bool_row("ChaosMode", "Chaos Mode"),
+            self._bool_row("ChaosMode", "Bypass Blessing Dependencies"),
             self._label_row("Bypass all blessing prerequisites"),
         ]))
 
