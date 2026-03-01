@@ -583,16 +583,6 @@ class Configurator(QMainWindow):
         version_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         slay.addWidget(version_label)
         slay.addSpacing(4)
-        if self.cfg_path:
-            cfg_label = QLabel(f"Config: {self.cfg_path}")
-            cfg_label.setStyleSheet("color: gray; font-size: 11px;")
-            cfg_label.setWordWrap(True)
-            slay.addWidget(cfg_label)
-        if self.game_path:
-            game_label = QLabel(f"Game: {self.game_path}")
-            game_label.setStyleSheet("color: gray; font-size: 11px;")
-            game_label.setWordWrap(True)
-            slay.addWidget(game_label)
         gh_label = QLabel(f'GitHub &amp; Install Instructions: <a href="https://github.com/{GITHUB_REPO}/blob/main/INSTALL.md">'
                           f'github.com/{GITHUB_REPO}</a>')
         gh_label.setStyleSheet("color: gray; font-size: 11px;")
