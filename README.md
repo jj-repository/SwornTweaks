@@ -1,6 +1,6 @@
 # SwornTweaks
 
-All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, unlimited gold, door reward replacement, duo boost, biome repeat, random beast rooms, boss/beast health and damage multipliers, intensity scaling, fae realm guarantees, and a structured boss rush mode. Everything is configurable.
+All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, unlimited gold, door reward replacement, duo boost, biome repeat, random beast rooms, boss/beast/player health and damage multipliers, intensity scaling, fae realm guarantees, guaranteed sword in the stone, extra blessings, a structured boss rush mode, and a fight-specific-boss mode. Everything is configurable.
 
 ## Installation
 
@@ -22,6 +22,12 @@ python3 configurator.py
 
 See [INSTALL.md](INSTALL.md) for setup. Windows standalone `.exe` available in [Releases](https://github.com/jj-repository/SwornTweaks/releases).
 
+Features:
+- Tabbed interface: **Player**, **Enemies**, **Toggles**, **Game Modes**, **Settings**, **Help**
+- Save/load config, share config codes, import/export `.cfg` files
+- Auto-update check for DLL and GUI from GitHub releases
+- Mascot image in Settings tab
+
 ## Configuration
 
 Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTweaks]` section. Changes take effect on the next run start.
@@ -42,11 +48,18 @@ Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTw
 | `RareChance` | `0.20` | Base chance for rare blessings (20%) |
 | `UncommonChance` | `0.25` | Base chance for uncommon blessings (25%) |
 
+### Extra Blessings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ExtraBlessings` | `0` | Extra blessing rewards after each room (0-3) |
+
 ### Gem Cost
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `NoGemCost` | `true` | Skip the 300 gold Lancelot gem socket cost (need 300 gold to see option) |
+| `RingOfDispelFree` | `false` | Unlock Ring of Dispel without buying gems (skip straight to Somewhere) |
 
 ### Gold
 
@@ -66,11 +79,20 @@ Settings are stored in `SWORN/UserData/MelonPreferences.cfg` under the `[SwornTw
 |---------|---------|-------------|
 | `DuoChance` | `0.35` | Duo blessing chance (0.35 = 35%) |
 
+### Player
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `PlayerHealthMultiplier` | `1.0` | Health multiplier for the player character (1.0 = no change) |
+| `PlayerDamageMultiplier` | `1.0` | Damage multiplier for the player character (1.0 = no change) |
+| `InfiniteMana` | `false` | Infinite mana — mana never decreases |
+| `Invincible` | `false` | Player takes no damage |
+
 ### Increase Run Length
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ExtraBiomes` | `1` | Number of extra combat biomes (0-3, inserted after DeepHarbor) |
+| `ExtraBiomes` | `0` | Number of extra combat biomes (0-3, inserted after DeepHarbor) |
 | `RandomizeRepeats` | `false` | Randomize which biomes fill the extra slots |
 | `AllBiomesRandom` | `false` | Completely randomize all combat biome order |
 | `ProgressiveScaling` | `false` | Normalize mob HP by biome slot position |
@@ -133,12 +155,6 @@ With vanilla biome order and no extra biomes, all corrections are 1.0x (no effec
 
 Room counts: Kingswood=15, Cornucopia=13, DeepHarbor=13. Fixed extra bosses are placed randomly in the eligible range (rooms 3 through totalRooms-3), protecting the early tutorial rooms and the biome boss room. Random chance also protects the last biome room and respects the per-biome cap.
 
-### Player
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `PlayerHealthMultiplier` | `1.0` | Health multiplier for the player character (1.0 = no change) |
-
 ### Health & Damage Multipliers
 
 | Setting | Default | Description |
@@ -169,9 +185,22 @@ Multiplies the result of `BiomeData.GetRoomIntensity`. Affects enemy spawn densi
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `GuaranteedFaeRealms` | `false` | Guarantee one Kiss and one Kiss Curse fae portal per run |
+| `GuaranteedFaeKiss` | `false` | Guarantee one Kiss fae portal per run |
+| `GuaranteedFaeKissCurse` | `false` | Guarantee one Kiss Curse fae portal per run |
 
-When enabled, a Kiss portal is guaranteed to appear in the first combat biome and a Kiss Curse portal in the second. If neither spawns naturally by room 8, the mod injects one into a non-boss room.
+### Sword in the Stone
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `GuaranteedSwordsBiomes` | `0` | Number of biomes with a guaranteed Sword in the Stone drop (0-4) |
+
+When set to 1-4, forces one Sword in the Stone reward per biome for that many biomes. Value of 0 disables the feature (vanilla random chance). Setting 4 covers all 3 combat biomes plus Camelot (after Arthur). Somewhere never spawns Sword in the Stone drops.
+
+### Skip Somewhere
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `SkipSomewhere` | `false` | Skip the Somewhere level and go directly to Morgana |
 
 ### Boss Rush
 
@@ -181,6 +210,8 @@ When enabled, a Kiss portal is guaranteed to appear in the first combat biome an
 | `BossRushHornRewards` | `1` | Trove (horn) rewards per boss rush room (0-3) |
 | `BossRushHealPerRoom` | `15` | HP healed after each boss rush room (0 = disabled) |
 | `BossRushScaling` | `1.25` | HP multiplier compounding per room (1.0 = no scaling) |
+| `BossRushRandomizer` | `false` | Randomize all boss/beast order across biomes |
+| `BossRushExtraBlessings` | `0` | Extra blessing rewards per boss rush room (0-3) |
 
 When enabled, each combat biome is shortened to a structured sequence:
 
@@ -193,16 +224,23 @@ All rooms receive configurable trove (horn) rewards. Unwanted post-level events 
 
 The Somewhere biome is shortened to 1 room (direct Morgana fight) with no extra rewards. The 3-gem Ring of Dispel requirement is automatically bypassed so you can always reach Morgana. In Camelot, the Roundtable knight fights stay vanilla.
 
-When Boss Rush is active, the following GUI sections are disabled (incompatible): Toggles, Spawn Intensity, Fae Realms, Extra Boss Rooms, and Increase Run Length.
+When Boss Rush is active, the following GUI sections are disabled (incompatible): Toggles, Spawn Intensity, Fae Realms, Sword in the Stone, Extra Boss Rooms, Increase Run Length, and Fight Boss.
 
-Example with 2 beasts and 2 bosses per biome:
+### Fight a Specific Boss
 
-- **Kingswood**: Room 0 (normal, SwordInTheStone) → Room 1 (beast) → Room 2 (beast) → Room 3 (boss) → Room 4 (boss, Healing fountain + Kiss portal)
-- **Cornucopia**: Room 0 → beasts → bosses → last boss (Healing fountain + KissCurse portal)
-- **DeepHarbor**: Room 0 → beasts → bosses → last boss (Healing fountain)
-- **Camelot**: Roundtable (vanilla) → Arthur
-- **Somewhere**: Direct to Morgana (no gems needed)
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `FightBossMode` | `false` | Enable specific boss fight mode (force-load a chosen boss) |
+| `FightBossSelection` | `Gawain` | Boss identifier to fight |
+| `FightBossRepeat` | `1` | Number of times to repeat the boss fight (1-5) |
+| `FightBossDamageMultiplier` | `1.0` | Damage multiplier for the fight boss (1.0 = no change) |
+| `FightBossHealth` | `0` | Exact HP for the fight boss (0 = use default boss health) |
 
+Available bosses: Questing Beast, Sir Canis, Bedivere, Sirens, Gawain, Lady Kay, Arthur, Arthur Dragon, Morgana.
+
+The GUI shows default vanilla HP (on Squire difficulty) for the selected boss. When Fight Boss is active, the Enemies tab, Toggles tab, and all other Game Modes sections are disabled.
+
+Fight Boss and Boss Rush are mutually exclusive — enabling one disables the other.
 
 ## Example Config
 
@@ -215,6 +253,7 @@ EpicChance = 0.08
 RareChance = 0.2
 UncommonChance = 0.25
 NoGemCost = true
+RingOfDispelFree = false
 UnlimitedGold = false
 NoCurrencyDoorRewards = true
 DuoChance = 0.35
@@ -230,6 +269,9 @@ FixedExtraBosses = 0
 BeastChancePercent = 0
 MaxBeastsPerBiome = 5
 PlayerHealthMultiplier = 1
+PlayerDamageMultiplier = 1
+InfiniteMana = false
+Invincible = false
 BossHealthMultiplier = 2
 BossDamageMultiplier = 1
 BeastHealthMultiplier = 2
@@ -237,12 +279,22 @@ BeastDamageMultiplier = 1
 EnemyHealthMultiplier = 1
 EnemyDamageMultiplier = 1
 IntensityMultiplier = 1
-GuaranteedFaeRealms = false
+GuaranteedFaeKiss = false
+GuaranteedFaeKissCurse = false
+GuaranteedSwordsBiomes = 0
+SkipSomewhere = false
+ExtraBlessings = 0
 BossRushMode = false
 BossRushHornRewards = 1
 BossRushHealPerRoom = 15
 BossRushScaling = 1.25
-
+BossRushRandomizer = false
+BossRushExtraBlessings = 0
+FightBossMode = false
+FightBossSelection = Gawain
+FightBossRepeat = 1
+FightBossDamageMultiplier = 1
+FightBossHealth = 0
 ```
 
 ## Supersedes
