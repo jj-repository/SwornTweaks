@@ -15,9 +15,10 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap, QFont, QPen
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QDoubleSpinBox, QFileDialog,
+    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-    QPushButton, QSpinBox, QTabWidget, QToolButton, QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QSpinBox, QTabWidget, QVBoxLayout,
+    QWidget,
 )
 
 VERSION = "1.7.0"
@@ -40,7 +41,6 @@ VANILLA_DEFAULTS = {
     "UnlimitedGold": False,
     "NoCurrencyDoorRewards": False,
     "DuoChance": 0.0,
-    "RoundTableChance": 0.0,
     "ExtraBiomes": 0,
     "RandomizeRepeats": False,
     "AllBiomesRandom": False,
@@ -71,14 +71,43 @@ VANILLA_DEFAULTS = {
     "BossRushHealPerRoom": 15,
     "BossRushScaling": 1.25,
     "BossRushRandomizer": False,
+    "BossRushRandomizeArthur": False,
+    "BossRushRandomizeRoundTable": False,
     "BossRushExtraBlessings": 0,
-
+    "ExtraBlessings": 0,
+    "FightBossMode": False,
+    "FightBossSelection": "Gawain",
+    "FightBossRepeat": 1,
+    "FightBossDamageMultiplier": 1.0,
+    "FightBossHealth": 0,
 }
 
-# Keys managed directly by _on_vanilla_beast_toggled (not via enable checkboxes)
-_BEAST_DIRECT_KEYS = ("SpawnBeastBosses", "ForceBiomeBoss")
+_DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
 
-_DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance", "RoundTableChance"}
+_FIGHT_BOSS_LIST = [
+    ("Questing Beast", "QuestingBeast"),
+    ("Sir Canis", "SirCanis"),
+    ("Bedivere", "Bedivere"),
+    ("Sirens", "Sirens"),
+    ("Gawain", "Gawain"),
+    ("Broodmother", "Broodmother"),
+    ("Arthur", "Arthur"),
+    ("Arthur Dragon", "ArthurDragon"),
+    ("Morgana", "Morgana"),
+]
+
+# Default boss HP at difficulty 1 (Squire)
+_BOSS_DEFAULT_HP = {
+    "QuestingBeast": 3000,
+    "SirCanis": 2000,
+    "Bedivere": 10000,
+    "Sirens": 7000,
+    "Gawain": 6000,
+    "Broodmother": 5000,
+    "Arthur": 18000,
+    "ArthurDragon": 22000,
+    "Morgana": 20000,
+}
 
 # Embedded mascot image (base64-encoded JPEG, 250x250)
 _MASCOT_B64 = (
@@ -152,23 +181,36 @@ def settings_path() -> Path:
     return base / "SwornTweaks" / "configurator.json"
 
 
-def load_game_path() -> Path | None:
+def _load_settings() -> dict:
     sp = settings_path()
     if sp.exists():
         try:
-            data = json.loads(sp.read_text())
-            p = Path(data["game_path"])
-            if p.is_dir():
-                return p
-        except (json.JSONDecodeError, KeyError):
+            return json.loads(sp.read_text())
+        except json.JSONDecodeError:
             pass
+    return {}
+
+
+def _save_settings(data: dict):
+    sp = settings_path()
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    sp.write_text(json.dumps(data))
+
+
+def load_game_path() -> Path | None:
+    data = _load_settings()
+    gp = data.get("game_path")
+    if gp:
+        p = Path(gp)
+        if p.is_dir():
+            return p
     return None
 
 
 def save_game_path(path: Path):
-    sp = settings_path()
-    sp.parent.mkdir(parents=True, exist_ok=True)
-    sp.write_text(json.dumps({"game_path": str(path)}))
+    data = _load_settings()
+    data["game_path"] = str(path)
+    _save_settings(data)
 
 
 class DownloadWorker(QThread):
@@ -231,9 +273,9 @@ class Configurator(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"SwornTweaks Configurator v{VERSION}")
         self.setWindowIcon(make_icon())
+        self.resize(540, 740)
         self.widgets: dict[str, QWidget] = {}
         self._workers: list[DownloadWorker] = []
-        self._help_buttons: list[tuple[QGroupBox, QToolButton]] = []
 
         # Resolve game path
         self.game_path = load_game_path() or find_game_path()
@@ -251,7 +293,7 @@ class Configurator(QMainWindow):
         self._rerolls_group = self._group("Rerolls", [
             self._int_row("BonusRerolls", "Rerolls", 0, 9999),
             self._bool_row("InfiniteRerolls", "Infinite Rerolls"),
-        ])
+        ], "Bonus blessing rerolls per room.\nInfinite gives unlimited rerolls.")
 
         self._rarity_group = self._group("Blessing Rarity", [
             self._pct_row("LegendaryChance", "Legendary Chance", 0, 100),
@@ -259,28 +301,32 @@ class Configurator(QMainWindow):
             self._pct_row("RareChance", "Rare Chance", 0, 100),
             self._pct_row("UncommonChance", "Uncommon Chance", 0, 100),
             self._pct_row("DuoChance", "Duo Chance", 0, 100),
-            self._pct_row("RoundTableChance", "Round Table Chance", 0, 100),
-        ])
+        ], "Adjust the chance of each blessing rarity.\nValues are percentages.")
+
+        self._extra_blessings_group = self._group("Extra Blessings", [
+            self._int_row("ExtraBlessings", "Extra Blessings per Room", 0, 3),
+            self._label_row("Additional blessing rewards after each room."),
+        ], "Grant extra blessing choices after every room.")
 
         # Toggles groups
-        self._toggles_group = self._group("Toggles", [
+        self._toggles_group = self._group("General", [
             self._bool_row("NoGemCost", "No Gem Cost (Lancelot)"),
             self._bool_row("RingOfDispelFree", "Ring of Dispel Free"),
             self._label_row("Unlocks Ring of Dispel without buying gems."),
             self._bool_row("UnlimitedGold", "Unlimited Gold"),
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
             self._label_row("Except gold and shards."),
-        ])
+        ], "General gameplay toggles.\nRing of Dispel Free auto-disables No Gem Cost.")
 
         self._skip_group = self._group("Skip to Morgana", [
             self._bool_row("SkipSomewhere", "Skip from Arthur to Morgana"),
             self._label_row("Skips the Somewhere level pre-Morgana."),
-        ])
+        ], "Skip the Somewhere transition level.")
 
         self._fae_group = self._group("Guaranteed Fae Realms", [
             self._bool_row("GuaranteedFaeKiss", "Guaranteed Kiss Portal"),
             self._bool_row("GuaranteedFaeKissCurse", "Guaranteed Kiss Curse Portal"),
-        ])
+        ], "Force Fae Realm portals to always appear.")
 
         self.widgets["RingOfDispelFree"].stateChanged.connect(self._on_dispel_toggled)
 
@@ -290,7 +336,7 @@ class Configurator(QMainWindow):
             self._float_row("PlayerDamageMultiplier", "Player Damage", 0.1, 50.0, "x"),
             self._bool_row("InfiniteMana", "Infinite Mana"),
             self._bool_row("Invincible", "Invincible"),
-        ])
+        ], "Scale player health/damage.\nInfinite Mana and Invincible are cheat toggles.")
 
         # Enemies groups
         self._boss_scaling_group = self._group("Boss Scaling", [
@@ -298,26 +344,31 @@ class Configurator(QMainWindow):
             self._float_row("BossDamageMultiplier", "Boss Damage", 0.1, 50.0, "x"),
             self._float_row("BeastHealthMultiplier", "Beast Health", 0.1, 50.0, "x"),
             self._float_row("BeastDamageMultiplier", "Beast Damage", 0.1, 50.0, "x"),
-        ])
+        ], "Scale boss and beast health/damage multipliers.")
 
         self._enemy_scaling_group = self._group("Enemy Scaling", [
             self._float_row("EnemyHealthMultiplier", "Enemy Health", 0.1, 50.0, "x"),
             self._float_row("EnemyDamageMultiplier", "Enemy Damage", 0.1, 50.0, "x"),
             self._label_row("Affects normal enemies only.\nBoss/beast health has its own multipliers."),
-        ])
+        ], "Scale normal enemy health/damage.\nDoes not affect bosses or beasts.")
 
         self._intensity_group = self._group("Spawn Intensity", [
             self._float_row("IntensityMultiplier", "Enemy Spawn Rate", 0.1, 10.0, "x"),
             self._label_row("Scales enemy spawn count per room."),
-        ])
+        ], "Multiply the number of enemies that spawn per room.")
 
-        # Extra Boss Rooms
-        boss_rows = []
-        boss_rows.append(self._bool_row("UseVanillaBeastSettings", "Disable Extra Boss Rooms"))
-        boss_rows.append(self._bool_row("SpawnBeastBosses", "Spawn Beast Bosses"))
-        boss_rows.append(self._label_row("Include legendary beasts in extra boss room pool."))
-        boss_rows.append(self._bool_row("ForceBiomeBoss", "Also Spawn Main Bosses"))
-        boss_rows.append(self._label_row("Also include biome end bosses in the pool."))
+        # Extra Boss Rooms — enable checkbox + sub-controls wrapped for show/hide
+        enable_boss_row = QHBoxLayout()
+        self._enable_bosses_cb = QCheckBox("Enable Extra Boss Rooms")
+        enable_boss_row.addWidget(self._enable_bosses_cb)
+
+        self._beast_details = QWidget()
+        bd_lay = QVBoxLayout(self._beast_details)
+        bd_lay.setContentsMargins(0, 0, 0, 0)
+        bd_lay.addLayout(self._bool_row("SpawnBeastBosses", "Spawn Beast Bosses"))
+        bd_lay.addWidget(self._label_row("Include legendary beasts in extra boss room pool."))
+        bd_lay.addLayout(self._bool_row("ForceBiomeBoss", "Also Spawn Main Bosses"))
+        bd_lay.addWidget(self._label_row("Also include biome end bosses in the pool."))
 
         # Fixed Extra Bosses: enable checkbox + spinbox
         fixed_row = QHBoxLayout()
@@ -329,8 +380,8 @@ class Configurator(QMainWindow):
         fixed_spin.setFixedWidth(90)
         self.widgets["FixedExtraBosses"] = fixed_spin
         fixed_row.addWidget(fixed_spin)
-        boss_rows.append(fixed_row)
-        boss_rows.append(self._label_row("Guaranteed extra boss rooms per biome.\n"
+        bd_lay.addLayout(fixed_row)
+        bd_lay.addWidget(self._label_row("Guaranteed extra boss rooms per biome.\n"
                             "Placed randomly, avoiding first 3 and last 2 rooms."))
 
         # Random chance: enable checkbox + spinbox on same row
@@ -346,15 +397,56 @@ class Configurator(QMainWindow):
         beast_chance_spin.setFixedWidth(100)
         self.widgets["BeastChancePercent"] = beast_chance_spin
         random_row.addWidget(beast_chance_spin)
-        boss_rows.append(random_row)
+        bd_lay.addLayout(random_row)
 
-        boss_rows.append(self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15))
-        boss_rows.append(self._label_row("Max random beasts per biome (excludes fixed)."))
+        bd_lay.addLayout(self._int_row("MaxBeastsPerBiome", "Max per Biome", 0, 15))
+        bd_lay.addWidget(self._label_row("Max random beasts per biome (excludes fixed)."))
+        self._beast_details.setVisible(False)
 
-        self._extra_boss_group = self._group("Extra Boss Rooms", boss_rows)
+        self._extra_boss_group = self._group("Extra Bosses", [enable_boss_row, self._beast_details],
+            "Add extra beast/boss encounters per biome.\n"
+            "Enable to customize boss room settings.\n"
+            "Fixed bosses guaranteed; random chance rolls per room.")
 
         self._random_cb.stateChanged.connect(lambda _: self._update_beast_enables())
         self._fixed_bosses_cb.stateChanged.connect(lambda _: self._update_beast_enables())
+
+        # Fight a Specific Boss — enable checkbox + sub-controls wrapped for show/hide
+        fight_boss_row = QHBoxLayout()
+        self._fight_boss_cb = QCheckBox("Fight Boss")
+        fight_boss_row.addWidget(self._fight_boss_cb)
+
+        self._fight_boss_details = QWidget()
+        fb_lay = QVBoxLayout(self._fight_boss_details)
+        fb_lay.setContentsMargins(0, 0, 0, 0)
+
+        combo_row = QHBoxLayout()
+        combo_row.addWidget(QLabel("Select Boss"))
+        combo_row.addStretch()
+        self._fight_boss_combo = QComboBox()
+        self._fight_boss_combo.setFixedWidth(160)
+        for display, data in _FIGHT_BOSS_LIST:
+            self._fight_boss_combo.addItem(display, data)
+        combo_row.addWidget(self._fight_boss_combo)
+        fb_lay.addLayout(combo_row)
+
+        fb_lay.addLayout(self._int_row("FightBossRepeat", "Repeat Fight", 1, 5))
+        fb_lay.addLayout(self._float_row("FightBossDamageMultiplier", "Boss Damage", 0.1, 10.0, "x"))
+        fb_lay.addLayout(self._int_row("FightBossHealth", "Boss Health", 0, 999999))
+        self._fight_boss_hp_hint = QLabel()
+        self._fight_boss_hp_hint.setStyleSheet("color: gray; font-size: 11px;")
+        self._fight_boss_hp_hint.setWordWrap(True)
+        fb_lay.addWidget(self._fight_boss_hp_hint)
+        self._fight_boss_combo.currentIndexChanged.connect(lambda _: self._update_boss_hp_hint())
+        self._update_boss_hp_hint()
+        self._fight_boss_details.setVisible(False)
+
+        self._fight_boss_group = self._group("Fight a Specific Boss", [fight_boss_row, self._fight_boss_details],
+            "Force-load a specific boss as room 0.\n"
+            "Optionally repeat the fight and set custom stats.\n"
+            "Disables Enemies tab scaling when active.")
+
+        self._fight_boss_cb.stateChanged.connect(lambda _: self._update_fight_boss_enables())
 
         # Game Modes groups
         extra_row = QHBoxLayout()
@@ -368,6 +460,7 @@ class Configurator(QMainWindow):
         extra_row.addWidget(extra_spin)
 
         run_rows = [extra_row]
+        run_rows.append(self._label_row("1 Biome \u2248 12 Rooms"))
         run_rows.append(self._label_row("Adds more biomes before camelot.\n"
                             "In order if not randomized."))
         run_rows.append(self._bool_row("RandomizeRepeats", "Randomize Repeated Biomes Order"))
@@ -380,49 +473,78 @@ class Configurator(QMainWindow):
         run_rows.append(growth_row)
         run_rows.append(self._label_row("Scales difficulty for extra or random biomes.\n"
                             "1.0 = no scaling."))
-        self._run_length_group = self._group("Increase Run Length", run_rows)
+        self._run_length_group = self._group("More Biomes/Rooms", run_rows,
+            "Add extra combat biomes before Camelot.\n"
+            "Randomize biome order for variety.\n"
+            "Progressive scaling adjusts difficulty.")
 
         self._extra_cb.stateChanged.connect(lambda _: self._update_extra_enables())
         self.widgets["AllBiomesRandom"].stateChanged.connect(lambda _: self._update_extra_enables())
         self.widgets["ProgressiveScaling"].stateChanged.connect(lambda _: self._update_extra_enables())
 
-        # Boss Rush
-        rush_rows = []
-        rush_rows.append(self._bool_row("BossRushMode", "Enable Boss Rush"))
-        rush_rows.append(self._bool_row("BossRushRandomizer", "Randomize all boss/beast order"))
-        rush_rows.append(self._int_row("BossRushHornRewards", "Horns of Strength", 0, 3))
-        rush_rows.append(self._int_row("BossRushExtraBlessings", "Extra Blessings", 0, 3))
-        rush_rows.append(self._int_row("BossRushHealPerRoom", "Player HP Heal per Room", 0, 100))
-        rush_rows.append(self._float_row("BossRushScaling", "Boss HP Scaling per Room", 1.0, 3.0, "x"))
-        self._boss_rush_group = self._group("Boss Rush Mode", rush_rows)
+        # Boss Rush — enable row with status label, sub-controls wrapped for show/hide
+        rush_top = QHBoxLayout()
+        rush_cb = QCheckBox("Enable Boss Rush")
+        self.widgets["BossRushMode"] = rush_cb
+        rush_top.addWidget(rush_cb)
+        rush_top.addStretch()
+        self._rush_status = QLabel("Deactivated")
+        self._rush_status.setStyleSheet("color: #c62828; font-weight: bold;")
+        rush_top.addWidget(self._rush_status)
+        rush_top.addStretch()
+
+        self._rush_details = QWidget()
+        rd_lay = QVBoxLayout(self._rush_details)
+        rd_lay.setContentsMargins(0, 0, 0, 0)
+        rd_lay.addLayout(self._bool_row("BossRushRandomizer", "Randomize all boss/beast order"))
+        # Sub-toggles for randomizer — only visible when randomizer is checked
+        self._rush_rand_details = QWidget()
+        rrd_lay = QVBoxLayout(self._rush_rand_details)
+        rrd_lay.setContentsMargins(20, 0, 0, 0)
+        rrd_lay.addLayout(self._bool_row("BossRushRandomizeArthur", "Randomize Arthur Spawn"))
+        rrd_lay.addLayout(self._bool_row("BossRushRandomizeRoundTable", "Randomize RoundTable Spawn"))
+        self._rush_rand_details.setVisible(False)
+        rd_lay.addWidget(self._rush_rand_details)
+        rd_lay.addLayout(self._int_row("BossRushHornRewards", "Extra Horns per Room", 0, 3))
+        rd_lay.addLayout(self._int_row("BossRushExtraBlessings", "Extra Blessings per Room", 0, 3))
+        rd_lay.addLayout(self._int_row("BossRushHealPerRoom", "Player HP Heal per Room", 0, 100))
+        rd_lay.addLayout(self._float_row("BossRushScaling", "Boss HP Scaling per Room", 1.0, 3.0, "x"))
+        self._boss_rush_group = self._group("Boss Rush Mode", [rush_top, self._rush_details],
+            "Fight all bosses and beasts back-to-back.\n"
+            "Disables most other settings when active.\n"
+            "Randomizer shuffles encounters across biomes.")
 
         self.widgets["BossRushMode"].stateChanged.connect(lambda _: self._update_rush_enables())
+        self.widgets["BossRushRandomizer"].stateChanged.connect(
+            lambda _: self._rush_rand_details.setVisible(self.widgets["BossRushRandomizer"].isChecked()))
 
         # ── Assemble tabs ───────────────────────────────────────────
 
         self._tabs = QTabWidget()
 
-        blessings_page = QWidget()
-        blay = QVBoxLayout(blessings_page)
-        blay.addWidget(self._rerolls_group)
-        blay.addWidget(self._rarity_group)
-        blay.addStretch()
-        self._tabs.addTab(blessings_page, "Blessings")
+        def _scroll_tab(page: QWidget) -> QScrollArea:
+            sa = QScrollArea()
+            sa.setWidget(page)
+            sa.setWidgetResizable(True)
+            sa.setFrameShape(QScrollArea.Shape.NoFrame)
+            return sa
 
         player_page = QWidget()
         play = QVBoxLayout(player_page)
         play.addWidget(self._player_group)
+        play.addWidget(self._rerolls_group)
+        play.addWidget(self._rarity_group)
+        play.addWidget(self._extra_blessings_group)
         play.addStretch()
-        self._tabs.addTab(player_page, "Player")
+        self._tabs.addTab(_scroll_tab(player_page), "Player")
 
         enemies_page = QWidget()
         elay = QVBoxLayout(enemies_page)
         elay.addWidget(self._boss_scaling_group)
         elay.addWidget(self._enemy_scaling_group)
         elay.addWidget(self._intensity_group)
-        elay.addWidget(self._extra_boss_group)
         elay.addStretch()
-        self._tabs.addTab(enemies_page, "Enemies")
+        self._tabs.addTab(_scroll_tab(enemies_page), "Enemies")
 
         toggles_page = QWidget()
         tlay = QVBoxLayout(toggles_page)
@@ -430,14 +552,16 @@ class Configurator(QMainWindow):
         tlay.addWidget(self._skip_group)
         tlay.addWidget(self._fae_group)
         tlay.addStretch()
-        self._tabs.addTab(toggles_page, "Toggles")
+        self._tabs.addTab(_scroll_tab(toggles_page), "Toggles")
 
         modes_page = QWidget()
         mlay = QVBoxLayout(modes_page)
         mlay.addWidget(self._boss_rush_group)
         mlay.addWidget(self._run_length_group)
+        mlay.addWidget(self._extra_boss_group)
+        mlay.addWidget(self._fight_boss_group)
         mlay.addStretch()
-        self._tabs.addTab(modes_page, "Game Modes")
+        self._tabs.addTab(_scroll_tab(modes_page), "Game Modes")
 
         settings_page = QWidget()
         slay = QVBoxLayout(settings_page)
@@ -455,20 +579,68 @@ class Configurator(QMainWindow):
             game_label.setStyleSheet("color: gray; font-size: 11px;")
             game_label.setWordWrap(True)
             slay.addWidget(game_label)
+        gh_label = QLabel(f'GitHub &amp; Install Instructions: <a href="https://github.com/{GITHUB_REPO}/blob/main/INSTALL.md">'
+                          f'github.com/{GITHUB_REPO}</a>')
+        gh_label.setStyleSheet("color: gray; font-size: 11px;")
+        gh_label.setOpenExternalLinks(True)
+        slay.addWidget(gh_label)
         slay.addSpacing(12)
-        update_btn = QPushButton("Update Mod")
+        update_btn = QPushButton("Update Mod from GitHub")
         update_btn.setToolTip("Download latest DLL and configurator from GitHub")
         update_btn.clicked.connect(self._update_from_github)
         slay.addWidget(update_btn)
-        open_mods_btn = QPushButton("Open Mod Folder")
+        s_reset_btn = QPushButton("Reset to Vanilla Config")
+        s_reset_btn.clicked.connect(self._reset_defaults)
+        slay.addWidget(s_reset_btn)
+        s_share_btn = QPushButton("Share Config Code")
+        s_share_btn.setToolTip("Copy current settings as a shareable code to clipboard")
+        s_share_btn.clicked.connect(self._copy_code)
+        slay.addWidget(s_share_btn)
+        s_import_btn = QPushButton("Import Config Code")
+        s_import_btn.setToolTip("Load settings from a code string in your clipboard")
+        s_import_btn.clicked.connect(self._paste_code)
+        slay.addWidget(s_import_btn)
+        s_export_cfg_btn = QPushButton("Export Config .cfg")
+        s_export_cfg_btn.setToolTip("Save a copy of the config file to a chosen location")
+        s_export_cfg_btn.clicked.connect(self._export_cfg)
+        slay.addWidget(s_export_cfg_btn)
+        s_import_cfg_btn = QPushButton("Import Config .cfg")
+        s_import_cfg_btn.setToolTip("Load settings from an external .cfg file")
+        s_import_cfg_btn.clicked.connect(self._import_cfg)
+        slay.addWidget(s_import_cfg_btn)
+        slay.addSpacing(12)
+        open_mods_btn = QPushButton("Open Mods Folder")
         open_mods_btn.setToolTip("Open the Mods folder in your file manager")
         open_mods_btn.clicked.connect(self._open_mod_folder)
         slay.addWidget(open_mods_btn)
+        open_game_btn = QPushButton("Open Game Folder")
+        open_game_btn.setToolTip("Open the SWORN game folder in your file manager")
+        open_game_btn.clicked.connect(self._open_game_folder)
+        slay.addWidget(open_game_btn)
+        open_cfg_btn = QPushButton("Open Config Folder")
+        open_cfg_btn.setToolTip("Open the folder containing MelonPreferences.cfg")
+        open_cfg_btn.clicked.connect(self._open_config_folder)
+        slay.addWidget(open_cfg_btn)
+        slay.addSpacing(12)
+        self._auto_update_cb = QCheckBox("Check for updates on startup")
+        self._auto_update_cb.setChecked(_load_settings().get("auto_update_check", True))
+        self._auto_update_cb.stateChanged.connect(self._on_auto_update_toggled)
+        slay.addWidget(self._auto_update_cb)
+        slay.addSpacing(8)
+        mascot_data = base64.b64decode(_MASCOT_B64)
+        mascot_pix = QPixmap()
+        mascot_pix.loadFromData(mascot_data)
+        mascot_pix = mascot_pix.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+        mascot_label = QLabel()
+        mascot_label.setPixmap(mascot_pix)
+        mascot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        slay.addWidget(mascot_label)
         slay.addStretch()
-        self._tabs.addTab(settings_page, "Settings")
+        self._tabs.addTab(_scroll_tab(settings_page), "Settings")
 
         # Help button as corner widget on the tab bar
-        help_corner = QPushButton("Help ?")
+        help_corner = QPushButton("Help")
         help_corner.setStyleSheet(
             "QPushButton { background-color: #c62828; color: white; font-weight: bold; padding: 4px 12px; }"
             "QPushButton:hover { background-color: #d32f2f; }"
@@ -485,20 +657,6 @@ class Configurator(QMainWindow):
         copyright_label.setStyleSheet("color: gray;")
         bottom.addWidget(copyright_label)
         bottom.addStretch()
-
-        copy_code_btn = QPushButton("Share Config")
-        copy_code_btn.setToolTip("Copy current settings as a shareable code to clipboard")
-        copy_code_btn.clicked.connect(self._copy_code)
-        bottom.addWidget(copy_code_btn)
-
-        paste_code_btn = QPushButton("Import Config")
-        paste_code_btn.setToolTip("Load settings from a code string in your clipboard")
-        paste_code_btn.clicked.connect(self._paste_code)
-        bottom.addWidget(paste_code_btn)
-
-        reset_btn = QPushButton("Reset to Vanilla")
-        reset_btn.clicked.connect(self._reset_defaults)
-        bottom.addWidget(reset_btn)
 
         save_btn = QPushButton("Save Config")
         save_btn.setDefault(True)
@@ -518,30 +676,22 @@ class Configurator(QMainWindow):
         self.setCentralWidget(central)
         self._load()
 
-        # Wire up the vanilla beast checkbox to disable/enable beast fields
-        vanilla_cb = self.widgets["UseVanillaBeastSettings"]
-        vanilla_cb.stateChanged.connect(self._on_vanilla_beast_toggled)
-        self._on_vanilla_beast_toggled(vanilla_cb.checkState().value)
+        # Wire up the enable extra bosses checkbox to show/hide beast fields
+        self._enable_bosses_cb.stateChanged.connect(self._on_vanilla_beast_toggled)
+        self._on_vanilla_beast_toggled(None)
         self._on_dispel_toggled(None)
 
-        # Help tooltips on key sections
-        self._add_help_button(self._extra_boss_group,
-            "Add extra beast/boss encounters per biome.\n"
-            "Disable vanilla settings to customize.\n"
-            "Fixed bosses guaranteed; random chance rolls per room.")
-        self._add_help_button(self._run_length_group,
-            "Add extra combat biomes before Camelot.\n"
-            "Randomize biome order for variety.\n"
-            "Progressive scaling adjusts difficulty.")
-        self._add_help_button(self._boss_rush_group,
-            "Fight all bosses and beasts back-to-back.\n"
-            "Disables most other settings when active.\n"
-            "Randomizer shuffles encounters across biomes.")
+        # Auto-check for updates on startup (if enabled)
+        if self._auto_update_cb.isChecked():
+            self._update_checker = UpdateChecker()
+            self._update_checker.update_available.connect(self._on_update_available)
+            self._update_checker.start()
 
-        # Auto-check for updates on startup
-        self._update_checker = UpdateChecker()
-        self._update_checker.update_available.connect(self._on_update_available)
-        self._update_checker.start()
+    def _on_auto_update_toggled(self, _state):
+        """Persist the auto-update-check preference."""
+        data = _load_settings()
+        data["auto_update_check"] = self._auto_update_cb.isChecked()
+        _save_settings(data)
 
     def _on_update_available(self, remote_version: str):
         """Show update prompt when a newer version is found on GitHub."""
@@ -581,7 +731,7 @@ class Configurator(QMainWindow):
 
     # ── Widget builders ──────────────────────────────────────────
 
-    def _group(self, title: str, rows: list) -> QGroupBox:
+    def _group(self, title: str, rows: list, tooltip: str = "") -> QGroupBox:
         box = QGroupBox(title)
         vbox = QVBoxLayout()
         for row in rows:
@@ -590,6 +740,8 @@ class Configurator(QMainWindow):
             elif isinstance(row, QWidget):
                 vbox.addWidget(row)
         box.setLayout(vbox)
+        if tooltip:
+            self._add_help_button(box, tooltip)
         return box
 
     def _int_row(self, key: str, label: str, lo: int, hi: int) -> QHBoxLayout:
@@ -649,28 +801,10 @@ class Configurator(QMainWindow):
     # ── Help buttons ────────────────────────────────────────────
 
     def _add_help_button(self, group: QGroupBox, tooltip: str):
-        btn = QToolButton(group)
-        btn.setText("?")
-        btn.setToolTip(tooltip)
-        btn.setFixedSize(20, 20)
-        btn.setStyleSheet(
-            "QToolButton { background: #555; color: white; border-radius: 10px; "
-            "font-weight: bold; font-size: 12px; }"
-            "QToolButton:hover { background: #777; }"
-        )
-        self._help_buttons.append((group, btn))
-
-    def _reposition_help_buttons(self):
-        for group, btn in self._help_buttons:
-            btn.move(group.width() - btn.width() - 6, 2)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reposition_help_buttons()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._reposition_help_buttons()
+        # Append a small "?" indicator to the group title with the tooltip
+        title = group.title()
+        group.setTitle(f"{title}  \u24d8")
+        group.setToolTip(tooltip)
 
     # ── Beast vanilla toggle ────────────────────────────────────
 
@@ -680,16 +814,11 @@ class Configurator(QMainWindow):
         self.widgets["NoGemCost"].setEnabled(not dispel)
 
     def _on_vanilla_beast_toggled(self, _state):
-        """Disable beast fields when Disable Extra Boss Rooms is checked."""
-        vanilla = self.widgets["UseVanillaBeastSettings"].isChecked()
-        # Direct keys (SpawnBeastBosses, ForceBiomeBoss)
-        for key in _BEAST_DIRECT_KEYS:
-            self.widgets[key].setEnabled(not vanilla)
-        # Enable checkboxes
-        self._random_cb.setEnabled(not vanilla)
-        self._fixed_bosses_cb.setEnabled(not vanilla)
-        # Update spinbox enable states
-        self._update_beast_enables()
+        """Show/hide beast sub-controls based on Enable Extra Boss Rooms checkbox."""
+        enabled = self._enable_bosses_cb.isChecked()
+        self._beast_details.setVisible(enabled)
+        if enabled:
+            self._update_beast_enables()
 
     def _update_extra_enables(self):
         """Update enable states for run length controls."""
@@ -709,17 +838,24 @@ class Configurator(QMainWindow):
         self._growth_label.setEnabled(growth_enabled)
 
     def _update_rush_enables(self):
-        """Update enable states for boss rush controls and section lockout."""
+        """Update visibility for boss rush controls and section lockout."""
         rush = self.widgets["BossRushMode"].isChecked()
-        self.widgets["BossRushHornRewards"].setEnabled(rush)
-        self.widgets["BossRushExtraBlessings"].setEnabled(rush)
-        self.widgets["BossRushHealPerRoom"].setEnabled(rush)
-        self.widgets["BossRushScaling"].setEnabled(rush)
-        self.widgets["BossRushRandomizer"].setEnabled(rush)
+        self._rush_details.setVisible(rush)
+        # Status label
+        if rush:
+            self._rush_status.setText("Activated")
+            self._rush_status.setStyleSheet("color: #2e7d32; font-weight: bold;")
+        else:
+            self._rush_status.setText("Deactivated")
+            self._rush_status.setStyleSheet("color: #c62828; font-weight: bold;")
         # Section lockout: disable incompatible groups when boss rush is active
         for grp in (self._toggles_group, self._skip_group, self._intensity_group,
-                     self._fae_group, self._extra_boss_group, self._run_length_group):
+                     self._fae_group):
             grp.setEnabled(not rush)
+        # Hide run length and extra bosses entirely when rush is on
+        self._run_length_group.setVisible(not rush)
+        self._extra_boss_group.setVisible(not rush)
+        self._fight_boss_group.setEnabled(not rush)
         # Re-apply sub-control states when rush is turned off
         if not rush:
             self._on_vanilla_beast_toggled(None)
@@ -727,13 +863,33 @@ class Configurator(QMainWindow):
             self._update_beast_enables()
             self._update_extra_enables()
 
+    def _update_boss_hp_hint(self):
+        """Update the HP hint label based on selected boss."""
+        boss = self._fight_boss_combo.currentData()
+        hp = _BOSS_DEFAULT_HP.get(boss, 0)
+        self._fight_boss_hp_hint.setText(f"0 = use default boss health (default: {hp:,})")
+
+    def _update_fight_boss_enables(self):
+        """Show/hide fight boss details and lock all non-Player sections when active."""
+        active = self._fight_boss_cb.isChecked()
+        self._fight_boss_details.setVisible(active)
+        # When fight boss is active, disable Enemies tab, Toggles tab, and all
+        # Game Modes groups except Fight Boss itself
+        self._tabs.setTabEnabled(1, not active)  # Enemies
+        self._tabs.setTabEnabled(2, not active)  # Toggles
+        self._boss_rush_group.setEnabled(not active)
+        self._run_length_group.setEnabled(not active)
+        self._extra_boss_group.setEnabled(not active)
+        # When turning off, re-apply rush state (rush may have had its own lockout)
+        if not active:
+            self._update_rush_enables()
+
     def _update_beast_enables(self):
-        """Update spinbox enable states based on vanilla toggle + individual checkboxes."""
-        vanilla = self.widgets["UseVanillaBeastSettings"].isChecked()
-        random_on = not vanilla and self._random_cb.isChecked()
+        """Update spinbox enable states based on enable toggle + individual checkboxes."""
+        random_on = self._random_cb.isChecked()
         self.widgets["BeastChancePercent"].setEnabled(random_on)
         self.widgets["MaxBeastsPerBiome"].setEnabled(random_on)
-        self.widgets["FixedExtraBosses"].setEnabled(not vanilla and self._fixed_bosses_cb.isChecked())
+        self.widgets["FixedExtraBosses"].setEnabled(self._fixed_bosses_cb.isChecked())
 
     # ── Percentage helpers ───────────────────────────────────────
 
@@ -776,6 +932,11 @@ class Configurator(QMainWindow):
                 val = float(raw) if raw is not None else default
                 widget.setValue(self._cfg_to_display(key, val))
 
+        # UseVanillaBeastSettings is inverted into _enable_bosses_cb
+        vanilla_raw = cfg.get(SECTION, "UseVanillaBeastSettings", fallback=None)
+        vanilla_val = vanilla_raw.lower() in ("true", "1", "yes") if vanilla_raw is not None else VANILLA_DEFAULTS["UseVanillaBeastSettings"]
+        self._enable_bosses_cb.setChecked(not vanilla_val)
+
         # Set enable checkboxes based on loaded cfg values
         fixed_raw = cfg.get(SECTION, "FixedExtraBosses", fallback=None)
         fixed_val = int(fixed_raw) if fixed_raw is not None else VANILLA_DEFAULTS["FixedExtraBosses"]
@@ -787,9 +948,22 @@ class Configurator(QMainWindow):
         extra_val = self.widgets["ExtraBiomes"].value()
         self._extra_cb.setChecked(extra_val > 0)
 
+        # Fight Boss manual controls
+        fb_raw = cfg.get(SECTION, "FightBossMode", fallback=None)
+        fb_val = fb_raw.lower() in ("true", "1", "yes") if fb_raw is not None else VANILLA_DEFAULTS["FightBossMode"]
+        self._fight_boss_cb.setChecked(fb_val)
+
+        fb_sel_raw = cfg.get(SECTION, "FightBossSelection", fallback=None)
+        fb_sel = fb_sel_raw if fb_sel_raw is not None else VANILLA_DEFAULTS["FightBossSelection"]
+        idx = self._fight_boss_combo.findData(fb_sel)
+        if idx >= 0:
+            self._fight_boss_combo.setCurrentIndex(idx)
+
+        self._on_vanilla_beast_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()
+        self._update_fight_boss_enables()
 
     def _save(self):
         if not self.cfg_path:
@@ -825,6 +999,13 @@ class Configurator(QMainWindow):
                     val = self._display_to_cfg(key, widget.value())
                     cfg.set(SECTION, key, f"{val:g}")
 
+        # UseVanillaBeastSettings is the inverse of the Enable checkbox
+        cfg.set(SECTION, "UseVanillaBeastSettings", str(not self._enable_bosses_cb.isChecked()).lower())
+
+        # Fight Boss manual controls
+        cfg.set(SECTION, "FightBossMode", str(self._fight_boss_cb.isChecked()).lower())
+        cfg.set(SECTION, "FightBossSelection", self._fight_boss_combo.currentData())
+
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cfg_path, "w") as f:
             if preamble:
@@ -844,15 +1025,19 @@ class Configurator(QMainWindow):
                 widget.setValue(max(default, widget.minimum()))
             elif isinstance(widget, QDoubleSpinBox):
                 widget.setValue(self._cfg_to_display(key, default))
-        # Reset enable toggles (vanilla: fixed off, random off, extra off)
+        # Reset enable toggles (vanilla: bosses off, fixed off, random off, extra off)
+        self._enable_bosses_cb.setChecked(False)
         self._fixed_bosses_cb.setChecked(False)
         self._random_cb.setChecked(False)
         self._extra_cb.setChecked(False)
+        self._fight_boss_cb.setChecked(False)
+        self._fight_boss_combo.setCurrentIndex(0)
         self._on_vanilla_beast_toggled(None)
         self._on_dispel_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()
+        self._update_fight_boss_enables()
 
     def _start_game(self):
         """Launch SWORN via Steam."""
@@ -871,6 +1056,44 @@ class Configurator(QMainWindow):
         else:
             QMessageBox.warning(self, "Error", "Mods folder not found. Set the game path first.")
 
+    def _open_game_folder(self):
+        """Open the SWORN game folder in the system file manager."""
+        if self.game_path and self.game_path.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.game_path)))
+        else:
+            QMessageBox.warning(self, "Error", "Game folder not found.")
+
+    def _open_config_folder(self):
+        """Open the folder containing MelonPreferences.cfg."""
+        if self.cfg_path and self.cfg_path.parent.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.cfg_path.parent)))
+        else:
+            QMessageBox.warning(self, "Error", "Config folder not found.")
+
+    def _export_cfg(self):
+        """Save a copy of the current config to a user-chosen location."""
+        if not self.cfg_path or not self.cfg_path.exists():
+            QMessageBox.warning(self, "Error", "No config file found. Save first.")
+            return
+        dest, _ = QFileDialog.getSaveFileName(self, "Export Config", "MelonPreferences.cfg", "Config files (*.cfg)")
+        if dest:
+            import shutil
+            shutil.copy2(str(self.cfg_path), dest)
+            QMessageBox.information(self, "Exported", f"Config exported to:\n{dest}")
+
+    def _import_cfg(self):
+        """Load settings from an external .cfg file."""
+        src, _ = QFileDialog.getOpenFileName(self, "Import Config", "", "Config files (*.cfg);;All files (*)")
+        if src:
+            self._load_from_cfg(Path(src))
+            self._on_vanilla_beast_toggled(None)
+            self._on_dispel_toggled(None)
+            self._update_beast_enables()
+            self._update_extra_enables()
+            self._update_rush_enables()
+            self._update_fight_boss_enables()
+            QMessageBox.information(self, "Imported", "Config loaded. Click Save Config to write to disk.")
+
     # ── Config code sharing ──────────────────────────────────────
 
     def _build_code_dict(self) -> dict[str, str]:
@@ -885,9 +1108,12 @@ class Configurator(QMainWindow):
                 val = self._display_to_cfg(key, widget.value())
                 d[key] = f"{val:g}"
         # Toggle states
+        d["_enable_bosses"] = "1" if self._enable_bosses_cb.isChecked() else "0"
         d["_fixed"] = "1" if self._fixed_bosses_cb.isChecked() else "0"
         d["_random"] = "1" if self._random_cb.isChecked() else "0"
         d["_extra"] = "1" if self._extra_cb.isChecked() else "0"
+        d["_fight_boss"] = "1" if self._fight_boss_cb.isChecked() else "0"
+        d["_fight_boss_sel"] = self._fight_boss_combo.currentData()
         return d
 
     def _copy_code(self):
@@ -926,17 +1152,29 @@ class Configurator(QMainWindow):
             elif isinstance(widget, QDoubleSpinBox):
                 widget.setValue(self._cfg_to_display(key, float(raw)))
         # Toggle states
+        if "_enable_bosses" in pairs:
+            self._enable_bosses_cb.setChecked(pairs["_enable_bosses"] == "1")
+        elif "UseVanillaBeastSettings" in pairs:
+            # Backward compat: old codes stored UseVanillaBeastSettings directly
+            self._enable_bosses_cb.setChecked(pairs["UseVanillaBeastSettings"] not in ("1", "true", "True"))
         if "_fixed" in pairs:
             self._fixed_bosses_cb.setChecked(pairs["_fixed"] == "1")
         if "_random" in pairs:
             self._random_cb.setChecked(pairs["_random"] == "1")
         if "_extra" in pairs:
             self._extra_cb.setChecked(pairs["_extra"] == "1")
+        if "_fight_boss" in pairs:
+            self._fight_boss_cb.setChecked(pairs["_fight_boss"] == "1")
+        if "_fight_boss_sel" in pairs:
+            idx = self._fight_boss_combo.findData(pairs["_fight_boss_sel"])
+            if idx >= 0:
+                self._fight_boss_combo.setCurrentIndex(idx)
         self._on_vanilla_beast_toggled(None)
         self._on_dispel_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()
+        self._update_fight_boss_enables()
         QMessageBox.information(self, "Applied", "Config code applied. Click Save .cfg to write to disk.")
 
     # ── Update from GitHub ───────────────────────────────────────

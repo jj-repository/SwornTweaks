@@ -75,6 +75,9 @@ namespace SwornTweaks
         // Skip Somewhere
         internal static MelonPreferences_Entry<bool> SkipSomewhere = null!;
 
+        // Extra Blessings
+        internal static MelonPreferences_Entry<int> ExtraBlessings = null!;
+
         // Boss Rush
         internal static MelonPreferences_Entry<bool> BossRushMode = null!;
         internal static MelonPreferences_Entry<int> BossRushHornRewards = null!;
@@ -82,6 +85,13 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<float> BossRushScaling = null!;
         internal static MelonPreferences_Entry<bool> BossRushRandomizer = null!;
         internal static MelonPreferences_Entry<int> BossRushExtraBlessings = null!;
+
+        // Fight a Specific Boss
+        internal static MelonPreferences_Entry<bool> FightBossMode = null!;
+        internal static MelonPreferences_Entry<string> FightBossSelection = null!;
+        internal static MelonPreferences_Entry<int> FightBossRepeat = null!;
+        internal static MelonPreferences_Entry<float> FightBossDamageMultiplier = null!;
+        internal static MelonPreferences_Entry<int> FightBossHealth = null!;
 
         internal static void Init()
         {
@@ -178,6 +188,9 @@ namespace SwornTweaks
             SkipSomewhere = _cat.CreateEntry("SkipSomewhere", false,
                 "Skip the Somewhere level and go directly to Morgana");
 
+            ExtraBlessings = _cat.CreateEntry("ExtraBlessings", 0,
+                "Extra blessing rewards after each room (0-3)");
+
             BossRushMode = _cat.CreateEntry("BossRushMode", false,
                 "Structured boss rush: 1 normal room + unique beasts + unique bosses per biome");
             BossRushHornRewards = _cat.CreateEntry("BossRushHornRewards", 1,
@@ -190,6 +203,17 @@ namespace SwornTweaks
                 "Randomize all boss/beast order across biomes (Roundtable skipped, Morgana always last)");
             BossRushExtraBlessings = _cat.CreateEntry("BossRushExtraBlessings", 0,
                 "Extra blessing rewards per boss rush room (0-3)");
+
+            FightBossMode = _cat.CreateEntry("FightBossMode", false,
+                "Enable specific boss fight mode (force-load a chosen boss)");
+            FightBossSelection = _cat.CreateEntry("FightBossSelection", "Gawain",
+                "Boss identifier to fight (e.g. Gawain, Arthur, Morgana)");
+            FightBossRepeat = _cat.CreateEntry("FightBossRepeat", 1,
+                "Number of times to repeat the boss fight (1-5)");
+            FightBossDamageMultiplier = _cat.CreateEntry("FightBossDamageMultiplier", 1.0f,
+                "Damage multiplier for the fight boss (1.0 = no change)");
+            FightBossHealth = _cat.CreateEntry("FightBossHealth", 0,
+                "Exact HP for the fight boss (0 = use default boss health)");
 
         }
     }
