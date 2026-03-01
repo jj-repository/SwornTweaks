@@ -96,7 +96,7 @@ _FIGHT_BOSS_LIST = [
     ("Morgana", "Morgana"),
 ]
 
-# Default boss HP at difficulty 1 (Squire)
+# Default boss HP on Squire difficulty
 _BOSS_DEFAULT_HP = {
     "QuestingBeast": 3000,
     "SirCanis": 2000,
@@ -867,7 +867,7 @@ class Configurator(QMainWindow):
         """Update the HP hint label based on selected boss."""
         boss = self._fight_boss_combo.currentData()
         hp = _BOSS_DEFAULT_HP.get(boss, 0)
-        self._fight_boss_hp_hint.setText(f"0 = use default boss health (default: {hp:,})")
+        self._fight_boss_hp_hint.setText(f"0 = use default boss health (default: {hp:,} on Squire difficulty)")
 
     def _update_fight_boss_enables(self):
         """Show/hide fight boss details and lock all non-Player sections when active."""
