@@ -100,7 +100,7 @@ namespace SwornTweaks
         {
             _cat = MelonPreferences.CreateCategory("SwornTweaks");
 
-            BonusRerolls = _cat.CreateEntry("BonusRerolls", 50,
+            BonusRerolls = _cat.CreateEntry("BonusRerolls", 0,
                 "Extra rerolls added at the start of each run");
             InfiniteRerolls = _cat.CreateEntry("InfiniteRerolls", false,
                 "Set rerolls to 500 on every scene load");
@@ -114,7 +114,7 @@ namespace SwornTweaks
             UncommonChance = _cat.CreateEntry("UncommonChance", 0.25f,
                 "Base chance for uncommon blessings");
 
-            NoGemCost = _cat.CreateEntry("NoGemCost", true,
+            NoGemCost = _cat.CreateEntry("NoGemCost", false,
                 "Skip the 300 gold Lancelot gem socket cost (need 300 gold to see option)");
             RingOfDispelFree = _cat.CreateEntry("RingOfDispelFree", false,
                 "Unlock Ring of Dispel without buying gems (skip straight to Somewhere)");
@@ -122,10 +122,10 @@ namespace SwornTweaks
             UnlimitedGold = _cat.CreateEntry("UnlimitedGold", false,
                 "Make the game think you always have max gold (everything is free)");
 
-            NoCurrencyDoorRewards = _cat.CreateEntry("NoCurrencyDoorRewards", true,
+            NoCurrencyDoorRewards = _cat.CreateEntry("NoCurrencyDoorRewards", false,
                 "Replace currency door rewards (FairyEmber/Silk/Moonstone) with Paragon rewards");
 
-            DuoChance = _cat.CreateEntry("DuoChance", 0.35f,
+            DuoChance = _cat.CreateEntry("DuoChance", 0.0f,
                 "Duo blessing chance (0.35 = 35%)");
 
             RoundTableChance = _cat.CreateEntry("RoundTableChance", 0.0f,
@@ -165,9 +165,9 @@ namespace SwornTweaks
             Invincible = _cat.CreateEntry("Invincible", false,
                 "Player takes no damage");
 
-            BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 2.0f,
+            BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 1.0f,
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");
-            BeastHealthMultiplier = _cat.CreateEntry("BeastHealthMultiplier", 2.0f,
+            BeastHealthMultiplier = _cat.CreateEntry("BeastHealthMultiplier", 1.0f,
                 "Health multiplier for legendary beasts like Dagonet (1.0 = no change)");
 
             BossDamageMultiplier = _cat.CreateEntry("BossDamageMultiplier", 1.0f,
