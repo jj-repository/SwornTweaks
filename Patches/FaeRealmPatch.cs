@@ -29,7 +29,7 @@ namespace SwornTweaks.Patches
         static void Postfix(ref Il2CppReferenceArray<ExpeditionManager.Path> __result,
                             int nextRoomIndex, BiomeData biome)
         {
-            if (!Config.GuaranteedFaeRealms.Value) return;
+            if (!Config.GuaranteedFaeKiss.Value && !Config.GuaranteedFaeKissCurse.Value) return;
             if (__result == null || __result.Length == 0) return;
 
             var bt = biome != null ? biome.GetBiomeType() : BiomeType.None;
@@ -50,7 +50,9 @@ namespace SwornTweaks.Patches
                 }
             }
 
-            if (KissSpawned && KissCurseSpawned) return;
+            bool kissDone = KissSpawned || !Config.GuaranteedFaeKiss.Value;
+            bool curseDone = KissCurseSpawned || !Config.GuaranteedFaeKissCurse.Value;
+            if (kissDone && curseDone) return;
             if (nextRoomIndex < DEADLINE_ROOM) return;
 
             // Skip boss/beast rooms — don't inject portals there
@@ -70,12 +72,12 @@ namespace SwornTweaks.Patches
 
             PostLevelEventType toInject = PostLevelEventType.None;
 
-            if (!KissSpawned && biomeIndex <= 0)
+            if (!KissSpawned && Config.GuaranteedFaeKiss.Value && biomeIndex <= 0)
             {
                 toInject = PostLevelEventType.KissPortal;
                 KissSpawned = true;
             }
-            else if (!KissCurseSpawned && biomeIndex >= 1)
+            else if (!KissCurseSpawned && Config.GuaranteedFaeKissCurse.Value && biomeIndex >= 1)
             {
                 toInject = PostLevelEventType.KissCursePortal;
                 KissCurseSpawned = true;

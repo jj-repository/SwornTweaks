@@ -18,6 +18,7 @@ namespace SwornTweaks
 
         // Gem cost
         internal static MelonPreferences_Entry<bool> NoGemCost = null!;
+        internal static MelonPreferences_Entry<bool> RingOfDispelFree = null!;
 
         // Gold
         internal static MelonPreferences_Entry<bool> UnlimitedGold = null!;
@@ -27,6 +28,9 @@ namespace SwornTweaks
 
         // Duo blessings
         internal static MelonPreferences_Entry<float> DuoChance = null!;
+
+        // Round Table
+        internal static MelonPreferences_Entry<float> RoundTableChance = null!;
 
         // Run length / biome sequence
         internal static MelonPreferences_Entry<int> ExtraBiomes = null!;
@@ -45,6 +49,9 @@ namespace SwornTweaks
 
         // Player
         internal static MelonPreferences_Entry<float> PlayerHealthMultiplier = null!;
+        internal static MelonPreferences_Entry<float> PlayerDamageMultiplier = null!;
+        internal static MelonPreferences_Entry<bool> InfiniteMana = null!;
+        internal static MelonPreferences_Entry<bool> Invincible = null!;
 
         // Health multipliers
         internal static MelonPreferences_Entry<float> BossHealthMultiplier = null!;
@@ -62,14 +69,19 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<float> EnemyDamageMultiplier = null!;
 
         // Fae Realms
-        internal static MelonPreferences_Entry<bool> GuaranteedFaeRealms = null!;
+        internal static MelonPreferences_Entry<bool> GuaranteedFaeKiss = null!;
+        internal static MelonPreferences_Entry<bool> GuaranteedFaeKissCurse = null!;
+
+        // Skip Somewhere
+        internal static MelonPreferences_Entry<bool> SkipSomewhere = null!;
 
         // Boss Rush
         internal static MelonPreferences_Entry<bool> BossRushMode = null!;
         internal static MelonPreferences_Entry<int> BossRushHornRewards = null!;
         internal static MelonPreferences_Entry<int> BossRushHealPerRoom = null!;
         internal static MelonPreferences_Entry<float> BossRushScaling = null!;
-
+        internal static MelonPreferences_Entry<bool> BossRushRandomizer = null!;
+        internal static MelonPreferences_Entry<int> BossRushExtraBlessings = null!;
 
         internal static void Init()
         {
@@ -91,6 +103,8 @@ namespace SwornTweaks
 
             NoGemCost = _cat.CreateEntry("NoGemCost", true,
                 "Skip the 300 gold Lancelot gem socket cost (need 300 gold to see option)");
+            RingOfDispelFree = _cat.CreateEntry("RingOfDispelFree", false,
+                "Unlock Ring of Dispel without buying gems (skip straight to Somewhere)");
 
             UnlimitedGold = _cat.CreateEntry("UnlimitedGold", false,
                 "Make the game think you always have max gold (everything is free)");
@@ -100,6 +114,9 @@ namespace SwornTweaks
 
             DuoChance = _cat.CreateEntry("DuoChance", 0.35f,
                 "Duo blessing chance (0.35 = 35%)");
+
+            RoundTableChance = _cat.CreateEntry("RoundTableChance", 0.0f,
+                "Round Table blessing chance (0.0 = vanilla)");
 
             ExtraBiomes = _cat.CreateEntry("ExtraBiomes", 0,
                 "Number of extra combat biomes to add (0-3, inserted after DeepHarbor)");
@@ -128,6 +145,12 @@ namespace SwornTweaks
 
             PlayerHealthMultiplier = _cat.CreateEntry("PlayerHealthMultiplier", 1.0f,
                 "Health multiplier for the player character (1.0 = no change)");
+            PlayerDamageMultiplier = _cat.CreateEntry("PlayerDamageMultiplier", 1.0f,
+                "Damage multiplier for the player character (1.0 = no change)");
+            InfiniteMana = _cat.CreateEntry("InfiniteMana", false,
+                "Infinite mana — mana never decreases");
+            Invincible = _cat.CreateEntry("Invincible", false,
+                "Player takes no damage");
 
             BossHealthMultiplier = _cat.CreateEntry("BossHealthMultiplier", 2.0f,
                 "Health multiplier for bosses like Gawain, Arthur (1.0 = no change)");
@@ -147,8 +170,13 @@ namespace SwornTweaks
             EnemyDamageMultiplier = _cat.CreateEntry("EnemyDamageMultiplier", 1.0f,
                 "Damage multiplier for normal enemies (not bosses/beasts) (1.0 = no change)");
 
-            GuaranteedFaeRealms = _cat.CreateEntry("GuaranteedFaeRealms", false,
-                "Guarantee one Kiss and one Kiss Curse fae portal per run");
+            GuaranteedFaeKiss = _cat.CreateEntry("GuaranteedFaeKiss", false,
+                "Guarantee one Kiss fae portal per run");
+            GuaranteedFaeKissCurse = _cat.CreateEntry("GuaranteedFaeKissCurse", false,
+                "Guarantee one Kiss Curse fae portal per run");
+
+            SkipSomewhere = _cat.CreateEntry("SkipSomewhere", false,
+                "Skip the Somewhere level and go directly to Morgana");
 
             BossRushMode = _cat.CreateEntry("BossRushMode", false,
                 "Structured boss rush: 1 normal room + unique beasts + unique bosses per biome");
@@ -158,6 +186,10 @@ namespace SwornTweaks
                 "HP healed after each boss rush room (0 = disabled)");
             BossRushScaling = _cat.CreateEntry("BossRushScaling", 1.25f,
                 "HP multiplier compounding per boss rush room (1.0 = no scaling)");
+            BossRushRandomizer = _cat.CreateEntry("BossRushRandomizer", false,
+                "Randomize all boss/beast order across biomes (Roundtable skipped, Morgana always last)");
+            BossRushExtraBlessings = _cat.CreateEntry("BossRushExtraBlessings", 0,
+                "Extra blessing rewards per boss rush room (0-3)");
 
         }
     }

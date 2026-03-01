@@ -17,10 +17,10 @@ from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap, QFon
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QDoubleSpinBox, QFileDialog,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-    QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget,
 )
 
-VERSION = "1.6.1"
+VERSION = "1.7.0"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
@@ -36,9 +36,11 @@ VANILLA_DEFAULTS = {
     "RareChance": 0.20,
     "UncommonChance": 0.25,
     "NoGemCost": False,
+    "RingOfDispelFree": False,
     "UnlimitedGold": False,
     "NoCurrencyDoorRewards": False,
     "DuoChance": 0.0,
+    "RoundTableChance": 0.0,
     "ExtraBiomes": 0,
     "RandomizeRepeats": False,
     "AllBiomesRandom": False,
@@ -51,6 +53,9 @@ VANILLA_DEFAULTS = {
     "BeastChancePercent": 0.0,
     "MaxBeastsPerBiome": 5,
     "PlayerHealthMultiplier": 1.0,
+    "PlayerDamageMultiplier": 1.0,
+    "InfiniteMana": False,
+    "Invincible": False,
     "BossHealthMultiplier": 1.0,
     "BossDamageMultiplier": 1.0,
     "BeastHealthMultiplier": 1.0,
@@ -58,18 +63,22 @@ VANILLA_DEFAULTS = {
     "IntensityMultiplier": 1.0,
     "EnemyHealthMultiplier": 1.0,
     "EnemyDamageMultiplier": 1.0,
-    "GuaranteedFaeRealms": False,
+    "GuaranteedFaeKiss": False,
+    "GuaranteedFaeKissCurse": False,
+    "SkipSomewhere": False,
     "BossRushMode": False,
     "BossRushHornRewards": 1,
     "BossRushHealPerRoom": 15,
     "BossRushScaling": 1.25,
+    "BossRushRandomizer": False,
+    "BossRushExtraBlessings": 0,
 
 }
 
 # Keys managed directly by _on_vanilla_beast_toggled (not via enable checkboxes)
 _BEAST_DIRECT_KEYS = ("SpawnBeastBosses", "ForceBiomeBoss")
 
-_DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance"}
+_DECIMAL_PCT_KEYS = {"LegendaryChance", "EpicChance", "RareChance", "UncommonChance", "DuoChance", "RoundTableChance"}
 
 # Embedded mascot image (base64-encoded JPEG, 250x250)
 _MASCOT_B64 = (
@@ -177,14 +186,21 @@ class DownloadWorker(QThread):
             self.dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.dest.with_suffix(self.dest.suffix + ".tmp")
             urllib.request.urlretrieve(self.url, str(tmp))
-            # On Windows, you can't overwrite a running script, but you CAN
+            # On Windows, you can't overwrite a running exe, but you CAN
             # rename it. Move the old file aside, put the new one in place.
-            old = self.dest.with_suffix(self.dest.suffix + ".old")
-            old.unlink(missing_ok=True)
+            # Use a unique .old name to avoid conflicts with locked files
+            # from previous updates (WinError 5).
+            import time
+            old = self.dest.with_suffix(f".old{int(time.time())}")
             if self.dest.exists():
                 self.dest.rename(old)
             tmp.rename(self.dest)
-            old.unlink(missing_ok=True)
+            # Best-effort cleanup of .old files — don't fail if locked
+            for stale in self.dest.parent.glob(self.dest.stem + ".old*"):
+                try:
+                    stale.unlink()
+                except OSError:
+                    pass  # locked by OS — will be cleaned up next time
             self.finished.emit(str(self.dest))
         except Exception as e:
             self.error.emit(str(e))
@@ -218,6 +234,7 @@ class Configurator(QMainWindow):
         self.setMinimumWidth(960)
         self.widgets: dict[str, QWidget] = {}
         self._workers: list[DownloadWorker] = []
+        self._help_buttons: list[tuple[QGroupBox, QToolButton]] = []
 
         # Resolve game path
         self.game_path = load_game_path() or find_game_path()
@@ -237,7 +254,7 @@ class Configurator(QMainWindow):
 
         # ── Left column ──────────────────────────────────────────
         left.addWidget(self._group("Rerolls", [
-            self._int_row("BonusRerolls", "Bonus Rerolls", 0, 9999),
+            self._int_row("BonusRerolls", "Rerolls", 0, 9999),
             self._bool_row("InfiniteRerolls", "Infinite Rerolls"),
         ]))
 
@@ -247,15 +264,23 @@ class Configurator(QMainWindow):
             self._pct_row("RareChance", "Rare Chance", 0, 100),
             self._pct_row("UncommonChance", "Uncommon Chance", 0, 100),
             self._pct_row("DuoChance", "Duo Chance", 0, 100),
+            self._pct_row("RoundTableChance", "Round Table Chance", 0, 100),
         ]))
 
         self._toggles_group = self._group("Toggles", [
             self._bool_row("NoGemCost", "No Gem Cost (Lancelot)"),
+            self._bool_row("RingOfDispelFree", "Ring of Dispel Free"),
+            self._label_row("Unlocks Ring of Dispel without buying gems."),
             self._bool_row("UnlimitedGold", "Unlimited Gold"),
             self._bool_row("NoCurrencyDoorRewards", "No Currency Door Rewards"),
+            self._label_row("Except gold and shards."),
+            self._bool_row("SkipSomewhere", "Skip from Arthur to Morgana"),
+            self._label_row("Skips the Somewhere level pre-Morgana."),
         ])
         left.addWidget(self._toggles_group)
 
+        # Wire Ring of Dispel Free to grey out No Gem Cost
+        self.widgets["RingOfDispelFree"].stateChanged.connect(self._on_dispel_toggled)
 
         self._intensity_group = self._group("Spawn Intensity", [
             self._float_row("IntensityMultiplier", "Enemy Spawn Rate", 0.1, 10.0, "x"),
@@ -263,10 +288,9 @@ class Configurator(QMainWindow):
         ])
         left.addWidget(self._intensity_group)
 
-        self._fae_group = self._group("Fae Realms", [
-            self._bool_row("GuaranteedFaeRealms", "Guaranteed Fae Portals"),
-            self._label_row("Guarantee one Kiss and one Kiss Curse\n"
-                            "fae portal per run."),
+        self._fae_group = self._group("Guaranteed Fae Realms", [
+            self._bool_row("GuaranteedFaeKiss", "Guaranteed Kiss Portal"),
+            self._bool_row("GuaranteedFaeKissCurse", "Guaranteed Kiss Curse Portal"),
         ])
         left.addWidget(self._fae_group)
 
@@ -322,6 +346,9 @@ class Configurator(QMainWindow):
 
         center.addWidget(self._group("Player Scaling", [
             self._float_row("PlayerHealthMultiplier", "Player Health", 0.1, 50.0, "x"),
+            self._float_row("PlayerDamageMultiplier", "Player Damage", 0.1, 50.0, "x"),
+            self._bool_row("InfiniteMana", "Infinite Mana"),
+            self._bool_row("Invincible", "Invincible"),
         ]))
 
         center.addWidget(self._group("Boss Scaling", [
@@ -359,23 +386,29 @@ class Configurator(QMainWindow):
         run_rows.append(self._label_row("Randomizes all 3 combat biome slots\n"
                             "plus extras. Camelot/Somewhere stay last."))
         run_rows.append(self._bool_row("ProgressiveScaling", "Progressive HP Scaling"))
-        run_rows.append(self._float_row("ProgressiveScalingGrowth", "HP Scaling Growth", 1.0, 3.0, "x"))
+        growth_row = self._float_row("ProgressiveScalingGrowth", "HP Scaling Growth", 1.0, 3.0, "x")
+        self._growth_label = growth_row.itemAt(0).widget()
+        run_rows.append(growth_row)
         run_rows.append(self._label_row("Scales difficulty for extra or random biomes.\n"
                             "1.0 = no scaling."))
-        self._run_length_group = self._group("Increase Run Length", run_rows)
+        self._run_length_group = self._group("Extra Biomes & Order", run_rows)
         right.addWidget(self._run_length_group)
 
-        # Wire up extra biomes toggle + AllBiomesRandom for progressive scaling
+        # Wire up extra biomes toggle + AllBiomesRandom + ProgressiveScaling for progressive scaling
         self._extra_cb.stateChanged.connect(lambda _: self._update_extra_enables())
         self.widgets["AllBiomesRandom"].stateChanged.connect(lambda _: self._update_extra_enables())
+        self.widgets["ProgressiveScaling"].stateChanged.connect(lambda _: self._update_extra_enables())
 
         # Boss Rush
         rush_rows = []
         rush_rows.append(self._bool_row("BossRushMode", "Enable Boss Rush"))
-        rush_rows.append(self._int_row("BossRushHornRewards", "Extra Horn Rewards", 0, 3))
+        rush_rows.append(self._bool_row("BossRushRandomizer", "Randomize all boss/beast order"))
+        rush_rows.append(self._int_row("BossRushHornRewards", "Horns of Strength", 0, 3))
+        rush_rows.append(self._int_row("BossRushExtraBlessings", "Extra Blessings", 0, 3))
         rush_rows.append(self._int_row("BossRushHealPerRoom", "Player HP Heal per Room", 0, 100))
         rush_rows.append(self._float_row("BossRushScaling", "Boss HP Scaling per Room", 1.0, 3.0, "x"))
-        right.addWidget(self._group("Boss Rush Mode", rush_rows))
+        self._boss_rush_group = self._group("Boss Rush Mode", rush_rows)
+        right.addWidget(self._boss_rush_group)
 
         # Wire up boss rush toggle
         self.widgets["BossRushMode"].stateChanged.connect(lambda _: self._update_rush_enables())
@@ -454,6 +487,21 @@ class Configurator(QMainWindow):
         vanilla_cb = self.widgets["UseVanillaBeastSettings"]
         vanilla_cb.stateChanged.connect(self._on_vanilla_beast_toggled)
         self._on_vanilla_beast_toggled(vanilla_cb.checkState().value)
+        self._on_dispel_toggled(None)
+
+        # Help buttons on key sections
+        self._add_help_button(self._extra_boss_group,
+            "Add extra beast/boss encounters per biome.\n"
+            "Disable vanilla settings to customize.\n"
+            "Fixed bosses guaranteed; random chance rolls per room.")
+        self._add_help_button(self._run_length_group,
+            "Add extra combat biomes before Camelot.\n"
+            "Randomize biome order for variety.\n"
+            "Progressive scaling adjusts difficulty.")
+        self._add_help_button(self._boss_rush_group,
+            "Fight all bosses and beasts back-to-back.\n"
+            "Disables most other settings when active.\n"
+            "Randomizer shuffles encounters across biomes.")
 
         # Auto-check for updates on startup
         self._update_checker = UpdateChecker()
@@ -563,7 +611,38 @@ class Configurator(QMainWindow):
         lbl.setWordWrap(True)
         return lbl
 
+    # ── Help buttons ────────────────────────────────────────────
+
+    def _add_help_button(self, group: QGroupBox, tooltip: str):
+        btn = QToolButton(group)
+        btn.setText("?")
+        btn.setToolTip(tooltip)
+        btn.setFixedSize(20, 20)
+        btn.setStyleSheet(
+            "QToolButton { background: #555; color: white; border-radius: 10px; "
+            "font-weight: bold; font-size: 12px; }"
+            "QToolButton:hover { background: #777; }"
+        )
+        self._help_buttons.append((group, btn))
+
+    def _reposition_help_buttons(self):
+        for group, btn in self._help_buttons:
+            btn.move(group.width() - btn.width() - 6, 2)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_help_buttons()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._reposition_help_buttons()
+
     # ── Beast vanilla toggle ────────────────────────────────────
+
+    def _on_dispel_toggled(self, _state):
+        """Disable No Gem Cost when Ring of Dispel Free is checked (gems are irrelevant)."""
+        dispel = self.widgets["RingOfDispelFree"].isChecked()
+        self.widgets["NoGemCost"].setEnabled(not dispel)
 
     def _on_vanilla_beast_toggled(self, _state):
         """Disable beast fields when Disable Extra Boss Rooms is checked."""
@@ -589,14 +668,19 @@ class Configurator(QMainWindow):
             self.widgets["ProgressiveScaling"].setEnabled(False)
         else:
             self.widgets["ProgressiveScaling"].setEnabled(extra)
-        self.widgets["ProgressiveScalingGrowth"].setEnabled(extra or all_random)
+        prog_on = self.widgets["ProgressiveScaling"].isChecked()
+        growth_enabled = (extra or all_random) and prog_on
+        self.widgets["ProgressiveScalingGrowth"].setEnabled(growth_enabled)
+        self._growth_label.setEnabled(growth_enabled)
 
     def _update_rush_enables(self):
         """Update enable states for boss rush controls and section lockout."""
         rush = self.widgets["BossRushMode"].isChecked()
         self.widgets["BossRushHornRewards"].setEnabled(rush)
+        self.widgets["BossRushExtraBlessings"].setEnabled(rush)
         self.widgets["BossRushHealPerRoom"].setEnabled(rush)
         self.widgets["BossRushScaling"].setEnabled(rush)
+        self.widgets["BossRushRandomizer"].setEnabled(rush)
         # Section lockout: disable incompatible groups when boss rush is active
         for grp in (self._toggles_group, self._intensity_group, self._fae_group,
                      self._extra_boss_group, self._run_length_group):
@@ -604,6 +688,7 @@ class Configurator(QMainWindow):
         # Re-apply sub-control states when rush is turned off
         if not rush:
             self._on_vanilla_beast_toggled(None)
+            self._on_dispel_toggled(None)
             self._update_beast_enables()
             self._update_extra_enables()
 
@@ -729,6 +814,7 @@ class Configurator(QMainWindow):
         self._random_cb.setChecked(False)
         self._extra_cb.setChecked(False)
         self._on_vanilla_beast_toggled(None)
+        self._on_dispel_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()
@@ -812,6 +898,7 @@ class Configurator(QMainWindow):
         if "_extra" in pairs:
             self._extra_cb.setChecked(pairs["_extra"] == "1")
         self._on_vanilla_beast_toggled(None)
+        self._on_dispel_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
         self._update_rush_enables()

@@ -7,11 +7,11 @@ using UnityEngine;
 namespace SwornTweaks.Patches
 {
     /// <summary>
-    /// Apply PlayerHealthMultiplier to the player character.
+    /// Apply PlayerHealthMultiplier and PlayerDamageMultiplier to the player character.
     ///
     /// Players use CharacterHealth (same base as mobs), but they are NOT Mob
     /// instances. We hook CharacterHealth.Setup Postfix and filter out Mob
-    /// objects, applying the multiplier only to player health.
+    /// objects, applying multipliers only to player stats.
     /// A per-instance guard prevents stacking if Setup is called multiple times.
     /// </summary>
     [HarmonyPatch(typeof(CharacterHealth), nameof(CharacterHealth.Setup))]
@@ -21,10 +21,6 @@ namespace SwornTweaks.Patches
 
         static void Postfix(CharacterHealth __instance)
         {
-            float mult = Config.PlayerHealthMultiplier.Value;
-            if (mult == 1.0f) return;
-
-            // Skip mobs — they have their own multipliers via HealthBoostPatch
             var go = __instance.gameObject;
             if (go == null) return;
             if (go.GetComponent<Mob>() != null) return;
@@ -32,15 +28,30 @@ namespace SwornTweaks.Patches
             int id = __instance.GetInstanceID();
             if (!_applied.Add(id)) return;
 
-            var hs = __instance.healthStats;
-            if (hs == null) return;
+            // Health multiplier
+            float hpMult = Config.PlayerHealthMultiplier.Value;
+            if (hpMult != 1.0f)
+            {
+                var hs = __instance.healthStats;
+                var healthMod = hs?.HealthMultiplier;
+                if (healthMod != null)
+                {
+                    healthMod.AddMod(hpMult);
+                    MelonLogger.Msg($"[SwornTweaks] Player health multiplied by {hpMult}x (Max={hs!.Max:F0})");
+                }
+            }
 
-            var healthMult = hs.HealthMultiplier;
-            if (healthMult == null) return;
-
-            healthMult.AddMod(mult);
-            float maxAfter = hs.Max;
-            MelonLogger.Msg($"[SwornTweaks] Player health multiplied by {mult}x (Max={maxAfter:F0})");
+            // Damage multiplier — access CombatStats via Player component
+            float dmgMult = Config.PlayerDamageMultiplier.Value;
+            if (dmgMult != 1.0f)
+            {
+                var player = go.GetComponent<Player>();
+                if (player != null)
+                {
+                    player.CombatStats?.AttackMultiplier?.AddMod(dmgMult);
+                    MelonLogger.Msg($"[SwornTweaks] Player damage multiplied by {dmgMult}x");
+                }
+            }
         }
     }
 
@@ -50,6 +61,40 @@ namespace SwornTweaks.Patches
         static void Prefix()
         {
             PlayerHealthPatch._applied.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Invincibility: skip all incoming damage for the player when enabled.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterHealth), nameof(CharacterHealth.ApplyDamage))]
+    static class InvincibilityPatch
+    {
+        static bool Prefix(CharacterHealth __instance, ref DamageResult __result)
+        {
+            if (!Config.Invincible.Value) return true;
+            var go = __instance.gameObject;
+            if (go == null || go.GetComponent<Mob>() != null) return true;
+            __result = default;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Infinite mana: override mana value to max whenever the game tries to set it.
+    /// </summary>
+    [HarmonyPatch(typeof(Mana), nameof(Mana.SetCurrentInternal))]
+    static class InfiniteManaPatch
+    {
+        static void Prefix(Mana __instance, ref float value)
+        {
+            if (!Config.InfiniteMana.Value) return;
+            if (!__instance.initialized) return;
+
+            var stats = __instance.manaStats;
+            if (stats == null) return;
+
+            value = stats.MaxMana;
         }
     }
 }
