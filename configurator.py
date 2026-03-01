@@ -65,6 +65,7 @@ VANILLA_DEFAULTS = {
     "EnemyDamageMultiplier": 1.0,
     "GuaranteedFaeKiss": False,
     "GuaranteedFaeKissCurse": False,
+    "GuaranteedSwordsBiomes": 0,
     "SkipSomewhere": False,
     "BossRushMode": False,
     "BossRushHornRewards": 1,
@@ -328,6 +329,18 @@ class Configurator(QMainWindow):
             self._bool_row("GuaranteedFaeKissCurse", "Guaranteed Kiss Curse Portal"),
         ], "Force Fae Realm portals to always appear.")
 
+        sword_row = QHBoxLayout()
+        self._sword_cb = QCheckBox("Guaranteed Swords")
+        self._sword_cb.stateChanged.connect(self._update_sword_enables)
+        sword_row.addWidget(self._sword_cb)
+        self._sword_group = self._group("Guaranteed Sword in the Stone", [
+            sword_row,
+            self._int_row("GuaranteedSwordsBiomes", "Total Swords in the Stone", 0, 4),
+        ], "Force a Sword in the Stone reward once per biome.\n"
+           "0 = disabled (vanilla chance), 1-3 = that many combat biomes,\n"
+           "4 = all combat biomes + after Arthur in Camelot.\n"
+           "Somewhere never spawns a Sword in the Stone.")
+
         self.widgets["RingOfDispelFree"].stateChanged.connect(self._on_dispel_toggled)
 
         # Player group
@@ -551,6 +564,7 @@ class Configurator(QMainWindow):
         tlay.addWidget(self._toggles_group)
         tlay.addWidget(self._skip_group)
         tlay.addWidget(self._fae_group)
+        tlay.addWidget(self._sword_group)
         tlay.addStretch()
         self._tabs.addTab(_scroll_tab(toggles_page), "Toggles")
 
@@ -850,7 +864,7 @@ class Configurator(QMainWindow):
             self._rush_status.setStyleSheet("color: #c62828; font-weight: bold;")
         # Section lockout: disable incompatible groups when boss rush is active
         for grp in (self._toggles_group, self._skip_group, self._intensity_group,
-                     self._fae_group):
+                     self._fae_group, self._sword_group):
             grp.setEnabled(not rush)
         # Hide run length and extra bosses entirely when rush is on
         self._run_length_group.setVisible(not rush)
@@ -883,6 +897,11 @@ class Configurator(QMainWindow):
         # When turning off, re-apply rush state (rush may have had its own lockout)
         if not active:
             self._update_rush_enables()
+
+    def _update_sword_enables(self):
+        """Enable/disable sword biome spinner based on checkbox."""
+        on = self._sword_cb.isChecked()
+        self.widgets["GuaranteedSwordsBiomes"].setEnabled(on)
 
     def _update_beast_enables(self):
         """Update spinbox enable states based on enable toggle + individual checkboxes."""
@@ -948,6 +967,10 @@ class Configurator(QMainWindow):
         extra_val = self.widgets["ExtraBiomes"].value()
         self._extra_cb.setChecked(extra_val > 0)
 
+        # Sword in the Stone: enable checkbox if biomes > 0
+        sword_val = self.widgets["GuaranteedSwordsBiomes"].value()
+        self._sword_cb.setChecked(sword_val > 0)
+
         # Fight Boss manual controls
         fb_raw = cfg.get(SECTION, "FightBossMode", fallback=None)
         fb_val = fb_raw.lower() in ("true", "1", "yes") if fb_raw is not None else VANILLA_DEFAULTS["FightBossMode"]
@@ -962,6 +985,7 @@ class Configurator(QMainWindow):
         self._on_vanilla_beast_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
+        self._update_sword_enables()
         self._update_rush_enables()
         self._update_fight_boss_enables()
 
@@ -988,6 +1012,8 @@ class Configurator(QMainWindow):
                 if key == "FixedExtraBosses" and not self._fixed_bosses_cb.isChecked():
                     cfg.set(SECTION, key, "0")
                 elif key == "ExtraBiomes" and not self._extra_cb.isChecked():
+                    cfg.set(SECTION, key, "0")
+                elif key == "GuaranteedSwordsBiomes" and not self._sword_cb.isChecked():
                     cfg.set(SECTION, key, "0")
                 else:
                     cfg.set(SECTION, key, str(widget.value()))
@@ -1032,10 +1058,12 @@ class Configurator(QMainWindow):
         self._extra_cb.setChecked(False)
         self._fight_boss_cb.setChecked(False)
         self._fight_boss_combo.setCurrentIndex(0)
+        self._sword_cb.setChecked(False)
         self._on_vanilla_beast_toggled(None)
         self._on_dispel_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
+        self._update_sword_enables()
         self._update_rush_enables()
         self._update_fight_boss_enables()
 
@@ -1114,6 +1142,7 @@ class Configurator(QMainWindow):
         d["_extra"] = "1" if self._extra_cb.isChecked() else "0"
         d["_fight_boss"] = "1" if self._fight_boss_cb.isChecked() else "0"
         d["_fight_boss_sel"] = self._fight_boss_combo.currentData()
+        d["_sword"] = "1" if self._sword_cb.isChecked() else "0"
         return d
 
     def _copy_code(self):
@@ -1169,10 +1198,13 @@ class Configurator(QMainWindow):
             idx = self._fight_boss_combo.findData(pairs["_fight_boss_sel"])
             if idx >= 0:
                 self._fight_boss_combo.setCurrentIndex(idx)
+        if "_sword" in pairs:
+            self._sword_cb.setChecked(pairs["_sword"] == "1")
         self._on_vanilla_beast_toggled(None)
         self._on_dispel_toggled(None)
         self._update_beast_enables()
         self._update_extra_enables()
+        self._update_sword_enables()
         self._update_rush_enables()
         self._update_fight_boss_enables()
         QMessageBox.information(self, "Applied", "Config code applied. Click Save .cfg to write to disk.")

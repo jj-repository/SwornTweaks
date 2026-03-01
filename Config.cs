@@ -72,6 +72,9 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<bool> GuaranteedFaeKiss = null!;
         internal static MelonPreferences_Entry<bool> GuaranteedFaeKissCurse = null!;
 
+        // Sword in the Stone
+        internal static MelonPreferences_Entry<int> GuaranteedSwordsBiomes = null!;
+
         // Skip Somewhere
         internal static MelonPreferences_Entry<bool> SkipSomewhere = null!;
 
@@ -184,6 +187,9 @@ namespace SwornTweaks
                 "Guarantee one Kiss fae portal per run");
             GuaranteedFaeKissCurse = _cat.CreateEntry("GuaranteedFaeKissCurse", false,
                 "Guarantee one Kiss Curse fae portal per run");
+
+            GuaranteedSwordsBiomes = _cat.CreateEntry("GuaranteedSwordsBiomes", 0,
+                "Number of biomes that get a guaranteed Sword in the Stone (0=disabled, 1-4)");
 
             SkipSomewhere = _cat.CreateEntry("SkipSomewhere", false,
                 "Skip the Somewhere level and go directly to Morgana");
