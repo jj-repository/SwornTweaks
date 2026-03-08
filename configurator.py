@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
@@ -233,11 +233,20 @@ class DownloadWorker(QThread):
             # rename it. Move the old file aside, put the new one in place.
             # Use a unique .old name to avoid conflicts with locked files
             # from previous updates (WinError 5).
+            # Verify the downloaded tmp file exists and is non-empty
+            if not tmp.exists() or tmp.stat().st_size == 0:
+                raise RuntimeError("Downloaded file is missing or empty")
             import time
             old = self.dest.with_suffix(f".old{int(time.time())}")
             if self.dest.exists():
                 self.dest.rename(old)
-            tmp.rename(self.dest)
+            try:
+                tmp.rename(self.dest)
+            except Exception:
+                # Restore from backup if moving the new file into place fails
+                if old.exists() and not self.dest.exists():
+                    old.rename(self.dest)
+                raise
             # Best-effort cleanup of .old files — don't fail if locked
             for stale in self.dest.parent.glob(self.dest.stem + ".old*"):
                 try:
@@ -263,8 +272,13 @@ class UpdateChecker(QThread):
             m = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', head)
             if m:
                 remote = m.group(1)
-                if remote != VERSION:
-                    self.update_available.emit(remote)
+                try:
+                    remote_tuple = tuple(map(int, remote.split(".")))
+                    local_tuple = tuple(map(int, VERSION.split(".")))
+                    if remote_tuple > local_tuple:
+                        self.update_available.emit(remote)
+                except (ValueError, TypeError):
+                    pass  # malformed version string — skip update check
         except Exception:
             pass  # silently ignore — don't pester the user if offline
 
@@ -934,11 +948,23 @@ class Configurator(QMainWindow):
                 val = raw.lower() in ("true", "1", "yes") if raw is not None else default
                 widget.setChecked(val)
             elif isinstance(widget, QSpinBox):
-                val = int(raw) if raw is not None else default
+                if raw is not None:
+                    try:
+                        val = int(raw)
+                    except ValueError:
+                        val = default
+                else:
+                    val = default
                 # BeastRoom spinboxes have range 0+; clamp -1 to 0
                 widget.setValue(max(val, widget.minimum()))
             elif isinstance(widget, QDoubleSpinBox):
-                val = float(raw) if raw is not None else default
+                if raw is not None:
+                    try:
+                        val = float(raw)
+                    except ValueError:
+                        val = default
+                else:
+                    val = default
                 widget.setValue(self._cfg_to_display(key, val))
 
         # UseVanillaBeastSettings is inverted into _enable_bosses_cb
@@ -948,7 +974,13 @@ class Configurator(QMainWindow):
 
         # Set enable checkboxes based on loaded cfg values
         fixed_raw = cfg.get(SECTION, "FixedExtraBosses", fallback=None)
-        fixed_val = int(fixed_raw) if fixed_raw is not None else VANILLA_DEFAULTS["FixedExtraBosses"]
+        if fixed_raw is not None:
+            try:
+                fixed_val = int(fixed_raw)
+            except ValueError:
+                fixed_val = VANILLA_DEFAULTS["FixedExtraBosses"]
+        else:
+            fixed_val = VANILLA_DEFAULTS["FixedExtraBosses"]
         self._fixed_bosses_cb.setChecked(fixed_val > 0)
 
         chance_val = self.widgets["BeastChancePercent"].value()
@@ -1023,7 +1055,7 @@ class Configurator(QMainWindow):
         cfg.set(SECTION, "FightBossSelection", self._fight_boss_combo.currentData())
 
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.cfg_path, "w") as f:
+        with open(self.cfg_path, "w", encoding="utf-8") as f:
             if preamble:
                 f.write(preamble)
             cfg.write(f)
