@@ -2,3 +2,6 @@ bin/
 obj/
 *.user
 __pycache__/
+venv/
+ENV/
+env/
