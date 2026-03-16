@@ -999,18 +999,21 @@ class Configurator(QMainWindow):
         self._fixed_bosses_cb.setChecked(fixed_val > 0)
 
         # Use raw config values (not clamped widget values) for enable checkboxes
-        chance_raw = cfg.get(SECTION, "BeastChancePercent", fallback=None)
-        chance_val = float(chance_raw) if chance_raw is not None else VANILLA_DEFAULTS["BeastChancePercent"]
-        self._random_cb.setChecked(chance_val > 0)
+        def _raw_float(key: str) -> float:
+            r = cfg.get(SECTION, key, fallback=None)
+            if r is None: return VANILLA_DEFAULTS[key]
+            try: return float(r)
+            except ValueError: return VANILLA_DEFAULTS[key]
 
-        extra_raw = cfg.get(SECTION, "ExtraBiomes", fallback=None)
-        extra_val = int(extra_raw) if extra_raw is not None else VANILLA_DEFAULTS["ExtraBiomes"]
-        self._extra_cb.setChecked(extra_val > 0)
+        def _raw_int(key: str) -> int:
+            r = cfg.get(SECTION, key, fallback=None)
+            if r is None: return VANILLA_DEFAULTS[key]
+            try: return int(r)
+            except ValueError: return VANILLA_DEFAULTS[key]
 
-        # Sword in the Stone: enable checkbox if biomes > 0
-        sword_raw = cfg.get(SECTION, "GuaranteedSwordsBiomes", fallback=None)
-        sword_val = int(sword_raw) if sword_raw is not None else VANILLA_DEFAULTS["GuaranteedSwordsBiomes"]
-        self._sword_cb.setChecked(sword_val > 0)
+        self._random_cb.setChecked(_raw_float("BeastChancePercent") > 0)
+        self._extra_cb.setChecked(_raw_int("ExtraBiomes") > 0)
+        self._sword_cb.setChecked(_raw_int("GuaranteedSwordsBiomes") > 0)
 
         # Fight Boss manual controls
         fb_raw = cfg.get(SECTION, "FightBossMode", fallback=None)
@@ -1036,12 +1039,10 @@ class Configurator(QMainWindow):
             return
         cfg = ConfigParser()
         cfg.optionxform = str  # preserve PascalCase keys for MelonPreferences
-        # Preserve any lines before the first section header (e.g. old mod entries)
-        preamble = ""
         if self.cfg_path.exists():
             lines = self.cfg_path.read_text(encoding="utf-8").splitlines(keepends=True)
+            # Skip stray lines before the first [Section] — they cause TOML parse errors
             first_section = next((i for i, l in enumerate(lines) if l.strip().startswith("[")), 0)
-            preamble = "".join(lines[:first_section])
             cfg.read_file(StringIO("".join(lines[first_section:])))
         if not cfg.has_section(SECTION):
             cfg.add_section(SECTION)
@@ -1075,7 +1076,6 @@ class Configurator(QMainWindow):
 
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cfg_path, "w", encoding="utf-8") as f:
-            # Don't write back stray preamble lines — they cause TOML parse errors
             cfg.write(f)
 
         QMessageBox.information(self, "Saved", f"Config saved to:\n{self.cfg_path}")
