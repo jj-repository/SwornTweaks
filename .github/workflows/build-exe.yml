@@ -18,16 +18,21 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install PyQt6 pyinstaller
+        run: pip install PyQt6 pyinstaller certifi
 
       - name: Build executable
-        run: pyinstaller --onefile --windowed --name SwornTweaks-Configurator configurator.py
+        run: >
+          pyinstaller --onefile --windowed
+          --name SwornTweaks-Windows
+          --hidden-import certifi
+          --collect-data certifi
+          configurator.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SwornTweaks-Configurator-Windows
-          path: dist/SwornTweaks-Configurator.exe
+          name: SwornTweaks-Windows
+          path: dist/SwornTweaks-Windows.exe
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -45,16 +50,21 @@ jobs:
           sudo apt-get install -y libegl1 libxkbcommon0
 
       - name: Install Python dependencies
-        run: pip install PyQt6 pyinstaller
+        run: pip install PyQt6 pyinstaller certifi
 
       - name: Build executable
-        run: pyinstaller --onefile --windowed --name SwornTweaks-Configurator configurator.py
+        run: >
+          pyinstaller --onefile --windowed
+          --name SwornTweaks-Configurator-Linux
+          --hidden-import certifi
+          --collect-data certifi
+          configurator.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: SwornTweaks-Configurator-Linux
-          path: dist/SwornTweaks-Configurator
+          path: dist/SwornTweaks-Configurator-Linux
 
   release:
     needs: [build-windows, build-linux]
@@ -68,7 +78,7 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: SwornTweaks-Configurator-Windows
+          name: SwornTweaks-Windows
           path: release/
 
       - name: Download Linux artifact
@@ -77,14 +87,10 @@ jobs:
           name: SwornTweaks-Configurator-Linux
           path: release/
 
-      - name: Rename Linux binary
-        run: mv release/SwornTweaks-Configurator release/SwornTweaks-Configurator-Linux
-
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/SwornTweaks-Configurator.exe
+            release/SwornTweaks-Windows.exe
             release/SwornTweaks-Configurator-Linux
             SwornTweaks.dll
-            configurator.py

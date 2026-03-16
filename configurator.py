@@ -7,7 +7,16 @@ import json
 import os
 import platform
 import sys
+import ssl
 import urllib.request
+
+# PyInstaller bundles don't include system SSL certificates.
+# Use certifi if available, otherwise fall back to default context.
+try:
+    import certifi
+    _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _ssl_ctx = None  # use system certs (works outside frozen builds)
 from configparser import ConfigParser
 from io import StringIO
 from pathlib import Path
@@ -228,7 +237,9 @@ class DownloadWorker(QThread):
         try:
             self.dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.dest.with_suffix(self.dest.suffix + ".tmp")
-            urllib.request.urlretrieve(self.url, str(tmp))
+            req = urllib.request.Request(self.url, headers={"User-Agent": "SwornTweaks"})
+            with urllib.request.urlopen(req, context=_ssl_ctx) as resp:
+                tmp.write_bytes(resp.read())
             # On Windows, you can't overwrite a running exe, but you CAN
             # rename it. Move the old file aside, put the new one in place.
             # Use a unique .old name to avoid conflicts with locked files
@@ -266,7 +277,7 @@ class UpdateChecker(QThread):
         try:
             import re
             req = urllib.request.Request(GITHUB_CONFIGURATOR, headers={"User-Agent": "SwornTweaks"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5, context=_ssl_ctx) as resp:
                 # Only read first 2KB — VERSION is near the top
                 head = resp.read(2048).decode("utf-8", errors="ignore")
             m = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', head)
@@ -1273,14 +1284,9 @@ class Configurator(QMainWindow):
     def _on_script_updated(self, path: str):
         QMessageBox.information(
             self, "Updated",
-            "SwornTweaks.dll and configurator updated.\n\n"
-            "The configurator will now restart."
+            f"SwornTweaks.dll and configurator updated.\n\n"
+            f"Restart the configurator to use the new version."
         )
-        # Launch new process then exit. os.execv doesn't work on Windows
-        # due to file locking and lack of proper exec semantics.
-        import subprocess
-        subprocess.Popen([sys.executable] + sys.argv)
-        QApplication.instance().quit()
 
     def _on_update_error(self, what: str, err: str):
         QMessageBox.critical(self, "Update Failed", f"Failed to download {what}:\n{err}")
