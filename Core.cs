@@ -28,6 +28,11 @@ namespace SwornTweaks
 
         }
 
+        public override void OnApplicationQuit()
+        {
+            SaveStateSave.DoSave();
+        }
+
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             if (!Config.InfiniteRerolls.Value) return;

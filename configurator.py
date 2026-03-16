@@ -999,7 +999,7 @@ class Configurator(QMainWindow):
         self._fight_boss_cb.setChecked(fb_val)
 
         fb_sel_raw = cfg.get(SECTION, "FightBossSelection", fallback=None)
-        fb_sel = fb_sel_raw if fb_sel_raw is not None else VANILLA_DEFAULTS["FightBossSelection"]
+        fb_sel = fb_sel_raw.strip('"') if fb_sel_raw is not None else VANILLA_DEFAULTS["FightBossSelection"]
         idx = self._fight_boss_combo.findData(fb_sel)
         if idx >= 0:
             self._fight_boss_combo.setCurrentIndex(idx)
@@ -1052,7 +1052,7 @@ class Configurator(QMainWindow):
 
         # Fight Boss manual controls
         cfg.set(SECTION, "FightBossMode", str(self._fight_boss_cb.isChecked()).lower())
-        cfg.set(SECTION, "FightBossSelection", self._fight_boss_combo.currentData())
+        cfg.set(SECTION, "FightBossSelection", f'"{self._fight_boss_combo.currentData()}"')
 
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cfg_path, "w", encoding="utf-8") as f:
