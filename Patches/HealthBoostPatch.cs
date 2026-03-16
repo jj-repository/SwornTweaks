@@ -31,6 +31,22 @@ namespace SwornTweaks.Patches
         // Vanilla biome power targets for slots 0-2 (hardcoded, not affected by growth)
         private static readonly float[] VanillaSlotTargets = { 1.0f, 1.5f, 4.0f };
 
+        // Known main-game base HP for bosses/beasts (Squire difficulty baseline).
+        // In boss rush mode these override whatever the game calculates so
+        // BossRushScaling / BossHealthMultiplier / BeastHealthMultiplier apply cleanly.
+        private static readonly Dictionary<string, float> BossRushBaseHP = new()
+        {
+            { "QuestingBeast", 3000f },
+            { "SirCanis",      2000f },
+            { "Bedivere",     10000f },
+            { "Sirens",        7000f },
+            { "Gawain",        6000f },
+            { "LadyKay",       8000f },
+            { "Arthur",       18000f },
+            { "ArthurDragon", 22000f },
+            { "Morgana",      20000f },
+        };
+
         private static float GetBossRushScaling()
         {
             if (!Config.BossRushMode.Value) return 1.0f;
@@ -119,33 +135,60 @@ namespace SwornTweaks.Patches
             float baseMax = hs?.BaseMax ?? 0;
             float max = hs?.Max ?? 0;
 
-            // Progressive HP scaling — applied to all mob types before category multipliers
-            float progMult = GetProgressiveMultiplier();
-            if (progMult != 1.0f && health != null)
-                health.AddMod(progMult);
+            bool isBossRush = Config.BossRushMode.Value;
+            bool isBoss = __instance.IsBoss;
+            bool isBeast = __instance.IsMajorEnemy;
 
-            // Boss Rush progressive scaling — compounds per room, stacks with all other multipliers
+            // Boss Rush HP override: reset bosses/beasts to their known main-game HP
+            // so that BossRushScaling and user multipliers apply on a consistent base.
+            float rushBaseHP = 0f;
+            bool rushOverridden = false;
+            if (isBossRush && (isBoss || isBeast) && health != null && max > 0f
+                && BossRushBaseHP.TryGetValue(mobType, out rushBaseHP))
+            {
+                float correction = rushBaseHP / max;
+                if (MathF.Abs(correction - 1.0f) > 0.001f)
+                    health.AddMod(correction);
+                rushOverridden = true;
+            }
+
+            // Progressive HP scaling — skip for boss rush HP-overridden mobs
+            float progMult = 1.0f;
+            if (!rushOverridden)
+            {
+                progMult = GetProgressiveMultiplier();
+                if (progMult != 1.0f && health != null)
+                    health.AddMod(progMult);
+            }
+
+            // Boss Rush room-compounding scaling — compounds per room, stacks with all other multipliers
             float rushMult = GetBossRushScaling();
             if (rushMult != 1.0f && health != null)
                 health.AddMod(rushMult);
 
-            if (__instance.IsBoss)
+            if (isBoss)
             {
                 if (Config.BossHealthMultiplier.Value != 1.0f && health != null)
                     health.AddMod(Config.BossHealthMultiplier.Value);
                 if (Config.BossDamageMultiplier.Value != 1.0f)
                     __instance.CombatStats?.AttackMultiplier?.AddMod(Config.BossDamageMultiplier.Value);
                 float maxAfter = hs?.Max ?? 0;
-                MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | prog={progMult:F2}x | rush={rushMult:F2}x | hpMult={Config.BossHealthMultiplier.Value}x | dmgMult={Config.BossDamageMultiplier.Value}x");
+                if (rushOverridden)
+                    MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | GameMax={max:F0} | RushBase={rushBaseHP:F0} | AfterMod={maxAfter:F0} | rush={rushMult:F2}x | hpMult={Config.BossHealthMultiplier.Value}x | dmgMult={Config.BossDamageMultiplier.Value}x");
+                else
+                    MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | prog={progMult:F2}x | rush={rushMult:F2}x | hpMult={Config.BossHealthMultiplier.Value}x | dmgMult={Config.BossDamageMultiplier.Value}x");
             }
-            else if (__instance.IsMajorEnemy)
+            else if (isBeast)
             {
                 if (Config.BeastHealthMultiplier.Value != 1.0f && health != null)
                     health.AddMod(Config.BeastHealthMultiplier.Value);
                 if (Config.BeastDamageMultiplier.Value != 1.0f)
                     __instance.CombatStats?.AttackMultiplier?.AddMod(Config.BeastDamageMultiplier.Value);
                 float maxAfter = hs?.Max ?? 0;
-                MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | prog={progMult:F2}x | rush={rushMult:F2}x | hpMult={Config.BeastHealthMultiplier.Value}x | dmgMult={Config.BeastDamageMultiplier.Value}x");
+                if (rushOverridden)
+                    MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | GameMax={max:F0} | RushBase={rushBaseHP:F0} | AfterMod={maxAfter:F0} | rush={rushMult:F2}x | hpMult={Config.BeastHealthMultiplier.Value}x | dmgMult={Config.BeastDamageMultiplier.Value}x");
+                else
+                    MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | prog={progMult:F2}x | rush={rushMult:F2}x | hpMult={Config.BeastHealthMultiplier.Value}x | dmgMult={Config.BeastDamageMultiplier.Value}x");
             }
             else
             {

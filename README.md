@@ -1,6 +1,6 @@
 # SwornTweaks
 
-All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, unlimited gold, door reward replacement, duo boost, biome repeat, random beast rooms, boss/beast/player health and damage multipliers, intensity scaling, fae realm guarantees, guaranteed sword in the stone, extra blessings, a structured boss rush mode, and a fight-specific-boss mode. Everything is configurable.
+All-in-one SWORN mod combining rerolls, blessing rarity, gem cost skip, unlimited gold, door reward replacement, duo boost, biome repeat, random beast rooms, boss/beast/player health and damage multipliers, intensity scaling, fae realm guarantees, guaranteed sword in the stone, extra blessings, a structured boss rush mode, a fight-specific-boss mode, and multiplayer run save/resume. Everything is configurable.
 
 ## Installation
 
@@ -196,6 +196,19 @@ Multiplies the result of `BiomeData.GetRoomIntensity`. Affects enemy spawn densi
 
 When set to 1-4, forces one Sword in the Stone reward per biome for that many biomes. Value of 0 disables the feature (vanilla random chance). Setting 4 covers all 3 combat biomes plus Camelot (after Arthur). Somewhere never spawns Sword in the Stone drops.
 
+### Multiplayer Save
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `AutoSaveEnabled` | `false` | Auto-save run state after each room completion |
+| `LoadSaveOnStart` | `false` | Load saved run state on next run start (auto-resets after load) |
+
+Saves full run state (biome/room position, per-player gold, health, and blessings) to `UserData/SwornTweaks_SaveState.json` after each room transition. To resume a run: enable `LoadSaveOnStart` before starting a new run — the saved state will be restored and the setting auto-resets to prevent reload loops.
+
+In multiplayer, save is host-side only. On load, the host restores state and existing RPC infrastructure syncs to clients. Players must rejoin before starting the resumed run.
+
+The GUI configurator shows save file status (biome, room, timestamp) and provides a delete button.
+
 ### Skip Somewhere
 
 | Setting | Default | Description |
@@ -282,6 +295,8 @@ IntensityMultiplier = 1
 GuaranteedFaeKiss = false
 GuaranteedFaeKissCurse = false
 GuaranteedSwordsBiomes = 0
+AutoSaveEnabled = false
+LoadSaveOnStart = false
 SkipSomewhere = false
 ExtraBlessings = 0
 BossRushMode = false

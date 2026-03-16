@@ -81,6 +81,10 @@ namespace SwornTweaks
         // Extra Blessings
         internal static MelonPreferences_Entry<int> ExtraBlessings = null!;
 
+        // Multiplayer Save
+        internal static MelonPreferences_Entry<bool> AutoSaveEnabled = null!;
+        internal static MelonPreferences_Entry<bool> LoadSaveOnStart = null!;
+
         // Boss Rush
         internal static MelonPreferences_Entry<bool> BossRushMode = null!;
         internal static MelonPreferences_Entry<int> BossRushHornRewards = null!;
@@ -196,6 +200,11 @@ namespace SwornTweaks
 
             ExtraBlessings = _cat.CreateEntry("ExtraBlessings", 0,
                 "Extra blessing rewards after each room (0-3)");
+
+            AutoSaveEnabled = _cat.CreateEntry("AutoSaveEnabled", false,
+                "Auto-save run state after each room completion (multiplayer resume)");
+            LoadSaveOnStart = _cat.CreateEntry("LoadSaveOnStart", false,
+                "Load saved run state on next run start (auto-resets after load)");
 
             BossRushMode = _cat.CreateEntry("BossRushMode", false,
                 "Structured boss rush: 1 normal room + unique beasts + unique bosses per biome");
