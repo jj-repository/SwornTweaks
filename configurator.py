@@ -30,7 +30,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.7.2"
+VERSION = "1.8.0"
+_MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
@@ -239,7 +240,10 @@ class DownloadWorker(QThread):
             tmp = self.dest.with_suffix(self.dest.suffix + ".tmp")
             req = urllib.request.Request(self.url, headers={"User-Agent": "SwornTweaks"})
             with urllib.request.urlopen(req, context=_ssl_ctx) as resp:
-                tmp.write_bytes(resp.read())
+                data = resp.read(_MAX_DOWNLOAD_BYTES + 1)
+                if len(data) > _MAX_DOWNLOAD_BYTES:
+                    raise RuntimeError("Download exceeds 50 MB safety limit")
+                tmp.write_bytes(data)
             # On Windows, you can't overwrite a running exe, but you CAN
             # rename it. Move the old file aside, put the new one in place.
             # Use a unique .old name to avoid conflicts with locked files
@@ -994,14 +998,18 @@ class Configurator(QMainWindow):
             fixed_val = VANILLA_DEFAULTS["FixedExtraBosses"]
         self._fixed_bosses_cb.setChecked(fixed_val > 0)
 
-        chance_val = self.widgets["BeastChancePercent"].value()
+        # Use raw config values (not clamped widget values) for enable checkboxes
+        chance_raw = cfg.get(SECTION, "BeastChancePercent", fallback=None)
+        chance_val = float(chance_raw) if chance_raw is not None else VANILLA_DEFAULTS["BeastChancePercent"]
         self._random_cb.setChecked(chance_val > 0)
 
-        extra_val = self.widgets["ExtraBiomes"].value()
+        extra_raw = cfg.get(SECTION, "ExtraBiomes", fallback=None)
+        extra_val = int(extra_raw) if extra_raw is not None else VANILLA_DEFAULTS["ExtraBiomes"]
         self._extra_cb.setChecked(extra_val > 0)
 
         # Sword in the Stone: enable checkbox if biomes > 0
-        sword_val = self.widgets["GuaranteedSwordsBiomes"].value()
+        sword_raw = cfg.get(SECTION, "GuaranteedSwordsBiomes", fallback=None)
+        sword_val = int(sword_raw) if sword_raw is not None else VANILLA_DEFAULTS["GuaranteedSwordsBiomes"]
         self._sword_cb.setChecked(sword_val > 0)
 
         # Fight Boss manual controls
@@ -1010,7 +1018,7 @@ class Configurator(QMainWindow):
         self._fight_boss_cb.setChecked(fb_val)
 
         fb_sel_raw = cfg.get(SECTION, "FightBossSelection", fallback=None)
-        fb_sel = fb_sel_raw if fb_sel_raw is not None else VANILLA_DEFAULTS["FightBossSelection"]
+        fb_sel = fb_sel_raw.strip('"') if fb_sel_raw is not None else VANILLA_DEFAULTS["FightBossSelection"]
         idx = self._fight_boss_combo.findData(fb_sel)
         if idx >= 0:
             self._fight_boss_combo.setCurrentIndex(idx)
@@ -1063,12 +1071,11 @@ class Configurator(QMainWindow):
 
         # Fight Boss manual controls
         cfg.set(SECTION, "FightBossMode", str(self._fight_boss_cb.isChecked()).lower())
-        cfg.set(SECTION, "FightBossSelection", self._fight_boss_combo.currentData())
+        cfg.set(SECTION, "FightBossSelection", f'"{self._fight_boss_combo.currentData()}"')
 
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.cfg_path, "w", encoding="utf-8") as f:
-            if preamble:
-                f.write(preamble)
+            # Don't write back stray preamble lines — they cause TOML parse errors
             cfg.write(f)
 
         QMessageBox.information(self, "Saved", f"Config saved to:\n{self.cfg_path}")
@@ -1262,34 +1269,52 @@ class Configurator(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
+        self._update_results = {"dll": None, "cfg": None}  # None=pending, str=ok, False=failed
+
         # Download DLL
         dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll")
-        dll_worker.finished.connect(lambda p: self._on_dll_updated(p))
-        dll_worker.error.connect(lambda e: self._on_update_error("DLL", e))
+        dll_worker.finished.connect(lambda p: self._on_download_done("dll", p))
+        dll_worker.error.connect(lambda e: self._on_download_fail("dll", "DLL", e))
         self._workers.append(dll_worker)
 
         # Download configurator.py (self-update)
         script_path = Path(sys.argv[0]).resolve()
         cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
-        cfg_worker.finished.connect(lambda p: self._on_script_updated(p))
-        cfg_worker.error.connect(lambda e: self._on_update_error("Configurator", e))
+        cfg_worker.finished.connect(lambda p: self._on_download_done("cfg", p))
+        cfg_worker.error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
         self._workers.append(cfg_worker)
 
         dll_worker.start()
         cfg_worker.start()
+        self.statusBar().showMessage("Downloading update...", 0)
 
-    def _on_dll_updated(self, path: str):
-        self.statusBar().showMessage(f"DLL updated: {path}", 5000)
+    def _on_download_done(self, key: str, path: str):
+        self._update_results[key] = path
+        self._check_update_complete()
 
-    def _on_script_updated(self, path: str):
-        QMessageBox.information(
-            self, "Updated",
-            f"SwornTweaks.dll and configurator updated.\n\n"
-            f"Restart the configurator to use the new version."
-        )
-
-    def _on_update_error(self, what: str, err: str):
+    def _on_download_fail(self, key: str, what: str, err: str):
+        self._update_results[key] = False
         QMessageBox.critical(self, "Update Failed", f"Failed to download {what}:\n{err}")
+        self._check_update_complete()
+
+    def _check_update_complete(self):
+        """Called after each download finishes. Acts when both are done."""
+        if any(v is None for v in self._update_results.values()):
+            return  # still waiting
+        # Clean up finished workers
+        self._workers.clear()
+        if all(v and v is not False for v in self._update_results.values()):
+            self.statusBar().showMessage("Update complete", 5000)
+            QMessageBox.information(
+                self, "Updated",
+                "SwornTweaks.dll and configurator updated.\n\n"
+                "The configurator will now restart."
+            )
+            import subprocess
+            subprocess.Popen([sys.executable] + sys.argv)
+            QApplication.instance().quit()
+        else:
+            self.statusBar().showMessage("Update finished with errors", 5000)
 
 
 def main():
