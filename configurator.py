@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.0"
+VERSION = "1.7.2"
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
@@ -986,13 +986,11 @@ class Configurator(QMainWindow):
         chance_val = self.widgets["BeastChancePercent"].value()
         self._random_cb.setChecked(chance_val > 0)
 
-        extra_raw = cfg.get(SECTION, "ExtraBiomes", fallback=None)
-        extra_val = int(extra_raw) if extra_raw is not None else VANILLA_DEFAULTS["ExtraBiomes"]
+        extra_val = self.widgets["ExtraBiomes"].value()
         self._extra_cb.setChecked(extra_val > 0)
 
         # Sword in the Stone: enable checkbox if biomes > 0
-        sword_raw = cfg.get(SECTION, "GuaranteedSwordsBiomes", fallback=None)
-        sword_val = int(sword_raw) if sword_raw is not None else VANILLA_DEFAULTS["GuaranteedSwordsBiomes"]
+        sword_val = self.widgets["GuaranteedSwordsBiomes"].value()
         self._sword_cb.setChecked(sword_val > 0)
 
         # Fight Boss manual controls
@@ -1275,9 +1273,14 @@ class Configurator(QMainWindow):
     def _on_script_updated(self, path: str):
         QMessageBox.information(
             self, "Updated",
-            f"SwornTweaks.dll and configurator updated.\n\n"
-            f"Restart the configurator to use the new version."
+            "SwornTweaks.dll and configurator updated.\n\n"
+            "The configurator will now restart."
         )
+        # Launch new process then exit. os.execv doesn't work on Windows
+        # due to file locking and lack of proper exec semantics.
+        import subprocess
+        subprocess.Popen([sys.executable] + sys.argv)
+        QApplication.instance().quit()
 
     def _on_update_error(self, what: str, err: str):
         QMessageBox.critical(self, "Update Failed", f"Failed to download {what}:\n{err}")
