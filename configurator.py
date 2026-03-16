@@ -986,11 +986,13 @@ class Configurator(QMainWindow):
         chance_val = self.widgets["BeastChancePercent"].value()
         self._random_cb.setChecked(chance_val > 0)
 
-        extra_val = self.widgets["ExtraBiomes"].value()
+        extra_raw = cfg.get(SECTION, "ExtraBiomes", fallback=None)
+        extra_val = int(extra_raw) if extra_raw is not None else VANILLA_DEFAULTS["ExtraBiomes"]
         self._extra_cb.setChecked(extra_val > 0)
 
         # Sword in the Stone: enable checkbox if biomes > 0
-        sword_val = self.widgets["GuaranteedSwordsBiomes"].value()
+        sword_raw = cfg.get(SECTION, "GuaranteedSwordsBiomes", fallback=None)
+        sword_val = int(sword_raw) if sword_raw is not None else VANILLA_DEFAULTS["GuaranteedSwordsBiomes"]
         self._sword_cb.setChecked(sword_val > 0)
 
         # Fight Boss manual controls
