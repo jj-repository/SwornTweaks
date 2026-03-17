@@ -30,13 +30,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.0"
+VERSION = "1.8.1"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
 GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
+IS_FROZEN = getattr(sys, "frozen", False)  # True when running as PyInstaller .exe
 
 # Vanilla game defaults — unmodded behavior (used by "Reset to Vanilla" button)
 VANILLA_DEFAULTS = {
@@ -276,6 +277,8 @@ class DownloadWorker(QThread):
 class UpdateChecker(QThread):
     """Background thread to check GitHub for a newer version."""
     update_available = pyqtSignal(str)  # emits the remote version string
+    no_update = pyqtSignal()            # emits when already up to date
+    check_failed = pyqtSignal(str)      # emits error message on failure
 
     def run(self):
         try:
@@ -292,10 +295,14 @@ class UpdateChecker(QThread):
                     local_tuple = tuple(map(int, VERSION.split(".")))
                     if remote_tuple > local_tuple:
                         self.update_available.emit(remote)
+                    else:
+                        self.no_update.emit()
                 except (ValueError, TypeError):
-                    pass  # malformed version string — skip update check
-        except Exception:
-            pass  # silently ignore — don't pester the user if offline
+                    self.no_update.emit()
+            else:
+                self.no_update.emit()
+        except Exception as e:
+            self.check_failed.emit(str(e))
 
 
 class Configurator(QMainWindow):
@@ -620,7 +627,7 @@ class Configurator(QMainWindow):
         slay.addSpacing(12)
         update_btn = QPushButton("Update Mod from GitHub")
         update_btn.setToolTip("Download latest DLL and configurator from GitHub")
-        update_btn.clicked.connect(self._update_from_github)
+        update_btn.clicked.connect(self._check_and_update)
         slay.addWidget(update_btn)
         s_reset_btn = QPushButton("Reset to Vanilla Config")
         s_reset_btn.clicked.connect(self._reset_defaults)
@@ -737,7 +744,7 @@ class Configurator(QMainWindow):
             "(Downloads the latest DLL and configurator from GitHub)",
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._update_from_github()
+            self._do_update()
 
     # ── Game path ────────────────────────────────────────────────
 
@@ -1249,9 +1256,10 @@ class Configurator(QMainWindow):
         self._update_fight_boss_enables()
         QMessageBox.information(self, "Applied", "Config code applied. Click Save .cfg to write to disk.")
 
-    # ── Update from GitHub ───────────────────────────────────────
+    # ── Update logic ──────────────────────────────────────────────
 
-    def _update_from_github(self):
+    def _check_and_update(self):
+        """Manual update button: check version first, then download if newer."""
         if not self.mods_path:
             QMessageBox.warning(self, "Error", "No game path set.")
             return
@@ -1259,33 +1267,58 @@ class Configurator(QMainWindow):
             QMessageBox.warning(self, "Error", f"Mods folder not found:\n{self.mods_path}")
             return
 
-        reply = QMessageBox.question(
-            self, "Update from GitHub",
-            "This will download the latest:\n"
-            "  - SwornTweaks.dll (into Mods/)\n"
-            "  - configurator.py (self-update)\n\n"
-            "Proceed?",
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
+        self.statusBar().showMessage("Checking for updates…")
+        checker = UpdateChecker()
+        checker.update_available.connect(self._confirm_and_update)
+        checker.no_update.connect(self._on_already_up_to_date)
+        checker.check_failed.connect(
+            lambda e: QMessageBox.critical(self, "Update Check Failed", f"Could not reach GitHub:\n{e}"))
+        self._workers.append(checker)
+        checker.start()
 
-        self._update_results = {"dll": None, "cfg": None}  # None=pending, str=ok, False=failed
+    def _confirm_and_update(self, remote_version: str):
+        """Version check found a newer release — ask user to confirm."""
+        reply = QMessageBox.question(
+            self, "Update Available",
+            f"A new version is available!\n\n"
+            f"Current: v{VERSION}\n"
+            f"Latest:  v{remote_version}\n\n"
+            "Download and install the update?",
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._do_update()
+
+    def _on_already_up_to_date(self):
+        self.statusBar().showMessage(f"Already up to date (v{VERSION}).", 5000)
+        QMessageBox.information(
+            self, "Up to Date",
+            f"You already have the latest version (v{VERSION}).")
+
+    def _do_update(self):
+        """Download latest DLL (and configurator.py if not running as .exe)."""
+        if IS_FROZEN:
+            # Running as compiled .exe — only update DLL; can't replace .exe
+            # with .py source.
+            self._update_results = {"dll": None}
+        else:
+            self._update_results = {"dll": None, "cfg": None}
 
         # Download DLL
         dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll")
         dll_worker.finished.connect(lambda p: self._on_download_done("dll", p))
         dll_worker.error.connect(lambda e: self._on_download_fail("dll", "DLL", e))
         self._workers.append(dll_worker)
-
-        # Download configurator.py (self-update)
-        script_path = Path(sys.argv[0]).resolve()
-        cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
-        cfg_worker.finished.connect(lambda p: self._on_download_done("cfg", p))
-        cfg_worker.error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
-        self._workers.append(cfg_worker)
-
         dll_worker.start()
-        cfg_worker.start()
+
+        if not IS_FROZEN:
+            # Running as .py script — safe to self-update and restart.
+            script_path = Path(sys.argv[0]).resolve()
+            cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
+            cfg_worker.finished.connect(lambda p: self._on_download_done("cfg", p))
+            cfg_worker.error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
+            self._workers.append(cfg_worker)
+            cfg_worker.start()
+
         self.statusBar().showMessage("Downloading update...", 0)
 
     def _on_download_done(self, key: str, path: str):
@@ -1301,20 +1334,28 @@ class Configurator(QMainWindow):
         """Called after each download finishes. Acts when both are done."""
         if any(v is None for v in self._update_results.values()):
             return  # still waiting
-        # Clean up finished workers
         self._workers.clear()
-        if all(v and v is not False for v in self._update_results.values()):
-            self.statusBar().showMessage("Update complete", 5000)
+
+        if not all(v and v is not False for v in self._update_results.values()):
+            self.statusBar().showMessage("Update finished with errors", 5000)
+            return
+
+        if IS_FROZEN:
+            self.statusBar().showMessage("DLL updated", 5000)
+            QMessageBox.information(
+                self, "DLL Updated",
+                "SwornTweaks.dll has been updated.\n\n"
+                "To update the configurator itself, download the latest\n"
+                f".exe from: https://github.com/{GITHUB_REPO}/releases/latest")
+        else:
+            self.statusBar().showMessage("Update complete — restarting…", 5000)
             QMessageBox.information(
                 self, "Updated",
                 "SwornTweaks.dll and configurator updated.\n\n"
-                "The configurator will now restart."
-            )
+                "The configurator will now restart.")
             import subprocess
             subprocess.Popen([sys.executable] + sys.argv)
             QApplication.instance().quit()
-        else:
-            self.statusBar().showMessage("Update finished with errors", 5000)
 
 
 def main():
