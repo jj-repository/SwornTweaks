@@ -55,7 +55,7 @@ jobs:
       - name: Build executable
         run: >
           pyinstaller --onefile --windowed
-          --name SwornTweaks-Configurator-Linux
+          --name SwornTweaks-Linux
           --hidden-import certifi
           --collect-data certifi
           configurator.py
@@ -63,8 +63,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SwornTweaks-Configurator-Linux
-          path: dist/SwornTweaks-Configurator-Linux
+          name: SwornTweaks-Linux
+          path: dist/SwornTweaks-Linux
 
   release:
     needs: [build-windows, build-linux]
@@ -84,7 +84,7 @@ jobs:
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: SwornTweaks-Configurator-Linux
+          name: SwornTweaks-Linux
           path: release/
 
       - name: Upload to release
@@ -92,5 +92,5 @@ jobs:
         with:
           files: |
             release/SwornTweaks-Windows.exe
-            release/SwornTweaks-Configurator-Linux
+            release/SwornTweaks-Linux
             SwornTweaks.dll
