@@ -198,7 +198,7 @@ def _load_settings() -> dict:
     if sp.exists():
         try:
             return json.loads(sp.read_text())
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             pass
     return {}
 
@@ -227,8 +227,8 @@ def save_game_path(path: Path):
 
 class DownloadWorker(QThread):
     """Background thread for downloading files from GitHub."""
-    finished = pyqtSignal(str)
-    error = pyqtSignal(str)
+    download_finished = pyqtSignal(str)
+    download_error = pyqtSignal(str)
 
     def __init__(self, url: str, dest: Path):
         super().__init__()
@@ -269,9 +269,9 @@ class DownloadWorker(QThread):
                     stale.unlink()
                 except OSError:
                     pass  # locked by OS — will be cleaned up next time
-            self.finished.emit(str(self.dest))
+            self.download_finished.emit(str(self.dest))
         except Exception as e:
-            self.error.emit(str(e))
+            self.download_error.emit(str(e))
 
 
 class UpdateChecker(QThread):
@@ -743,6 +743,8 @@ class Configurator(QMainWindow):
 
     def _on_update_available(self, remote_version: str):
         """Show update prompt when a newer version is found on GitHub."""
+        if not self.mods_path or not self.mods_path.is_dir():
+            return  # can't update without a valid game path
         reply = QMessageBox.question(
             self, "Update Available",
             f"A new version of SwornTweaks is available!\n\n"
@@ -1335,8 +1337,8 @@ class Configurator(QMainWindow):
 
         # Download DLL
         dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll")
-        dll_worker.finished.connect(lambda p: self._on_download_done("dll", p))
-        dll_worker.error.connect(lambda e: self._on_download_fail("dll", "DLL", e))
+        dll_worker.download_finished.connect(lambda p: self._on_download_done("dll", p))
+        dll_worker.download_error.connect(lambda e: self._on_download_fail("dll", "DLL", e))
         self._workers.append(dll_worker)
         dll_worker.start()
 
@@ -1344,8 +1346,8 @@ class Configurator(QMainWindow):
             # Running as .py script — safe to self-update and restart.
             script_path = Path(sys.argv[0]).resolve()
             cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
-            cfg_worker.finished.connect(lambda p: self._on_download_done("cfg", p))
-            cfg_worker.error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
+            cfg_worker.download_finished.connect(lambda p: self._on_download_done("cfg", p))
+            cfg_worker.download_error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
             self._workers.append(cfg_worker)
             cfg_worker.start()
 
