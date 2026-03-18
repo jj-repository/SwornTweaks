@@ -240,7 +240,7 @@ class DownloadWorker(QThread):
             self.dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.dest.with_suffix(self.dest.suffix + ".tmp")
             req = urllib.request.Request(self.url, headers={"User-Agent": "SwornTweaks"})
-            with urllib.request.urlopen(req, context=_ssl_ctx) as resp:
+            with urllib.request.urlopen(req, timeout=30, context=_ssl_ctx) as resp:
                 data = resp.read(_MAX_DOWNLOAD_BYTES + 1)
                 if len(data) > _MAX_DOWNLOAD_BYTES:
                     raise RuntimeError("Download exceeds 50 MB safety limit")
@@ -264,7 +264,7 @@ class DownloadWorker(QThread):
                     old.rename(self.dest)
                 raise
             # Best-effort cleanup of .old files — don't fail if locked
-            for stale in self.dest.parent.glob(self.dest.stem + ".old*"):
+            for stale in self.dest.parent.glob(self.dest.stem + ".old[0-9]*"):
                 try:
                     stale.unlink()
                 except OSError:
@@ -312,7 +312,7 @@ class Configurator(QMainWindow):
         self.setWindowIcon(make_icon())
         self.resize(540, 740)
         self.widgets: dict[str, QWidget] = {}
-        self._workers: list[DownloadWorker] = []
+        self._workers: list[QThread] = []
 
         # Resolve game path
         self.game_path = load_game_path() or find_game_path()
@@ -696,6 +696,13 @@ class Configurator(QMainWindow):
         copyright_label = QLabel("\u00a9 JJ")
         copyright_label.setStyleSheet("color: gray;")
         bottom.addWidget(copyright_label)
+        bug_btn = QPushButton("Report Bug")
+        bug_btn.setToolTip("Open a bug report on GitHub")
+        bug_btn.setStyleSheet("QPushButton { background-color: #b71c1c; color: white; font-weight: bold; }"
+                              "QPushButton:hover { background-color: #c62828; }")
+        bug_btn.clicked.connect(self._report_bug)
+        bottom.addWidget(bug_btn)
+
         bottom.addStretch()
 
         save_btn = QPushButton("Save Config")
@@ -725,6 +732,7 @@ class Configurator(QMainWindow):
         if self._auto_update_cb.isChecked():
             self._update_checker = UpdateChecker()
             self._update_checker.update_available.connect(self._on_update_available)
+            self._update_checker.finished.connect(self._update_checker.deleteLater)
             self._update_checker.start()
 
     def _on_auto_update_toggled(self, _state):
@@ -1119,6 +1127,13 @@ class Configurator(QMainWindow):
         QDesktopServices.openUrl(QUrl("steam://rungameid/1763250"))
 
     @staticmethod
+    def _report_bug():
+        """Open the GitHub bug report template in the browser."""
+        QDesktopServices.openUrl(QUrl(
+            f"https://github.com/{GITHUB_REPO}/issues/new?template=bug_report.yml"
+        ))
+
+    @staticmethod
     def _open_help():
         """Open the README / install instructions on GitHub."""
         QDesktopServices.openUrl(QUrl(f"https://github.com/{GITHUB_REPO}#readme"))
@@ -1224,9 +1239,15 @@ class Configurator(QMainWindow):
             if isinstance(widget, QCheckBox):
                 widget.setChecked(raw in ("1", "true", "True"))
             elif isinstance(widget, QSpinBox):
-                widget.setValue(max(int(raw), widget.minimum()))
+                try:
+                    widget.setValue(max(int(raw), widget.minimum()))
+                except ValueError:
+                    pass
             elif isinstance(widget, QDoubleSpinBox):
-                widget.setValue(self._cfg_to_display(key, float(raw)))
+                try:
+                    widget.setValue(self._cfg_to_display(key, float(raw)))
+                except ValueError:
+                    pass
         # Toggle states
         if "_enable_bosses" in pairs:
             self._enable_bosses_cb.setChecked(pairs["_enable_bosses"] == "1")
@@ -1260,6 +1281,9 @@ class Configurator(QMainWindow):
 
     def _check_and_update(self):
         """Manual update button: check version first, then download if newer."""
+        if self._workers:
+            self.statusBar().showMessage("Update already in progress…", 3000)
+            return
         if not self.mods_path:
             QMessageBox.warning(self, "Error", "No game path set.")
             return
@@ -1271,8 +1295,7 @@ class Configurator(QMainWindow):
         checker = UpdateChecker()
         checker.update_available.connect(self._confirm_and_update)
         checker.no_update.connect(self._on_already_up_to_date)
-        checker.check_failed.connect(
-            lambda e: QMessageBox.critical(self, "Update Check Failed", f"Could not reach GitHub:\n{e}"))
+        checker.check_failed.connect(self._on_check_failed)
         self._workers.append(checker)
         checker.start()
 
@@ -1287,8 +1310,15 @@ class Configurator(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self._do_update()
+        else:
+            self._workers.clear()
+
+    def _on_check_failed(self, err: str):
+        self._workers.clear()
+        QMessageBox.critical(self, "Update Check Failed", f"Could not reach GitHub:\n{err}")
 
     def _on_already_up_to_date(self):
+        self._workers.clear()
         self.statusBar().showMessage(f"Already up to date (v{VERSION}).", 5000)
         QMessageBox.information(
             self, "Up to Date",
