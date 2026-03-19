@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.2"
+VERSION = "1.8.3"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -38,6 +38,29 @@ GITHUB_DLL = f"{GITHUB_RAW}/SwornTweaks.dll"
 GITHUB_CONFIGURATOR = f"{GITHUB_RAW}/configurator.py"
 SECTION = "SwornTweaks"
 IS_FROZEN = getattr(sys, "frozen", False)  # True when running as PyInstaller .exe
+
+_DARK_STYLE = """
+QWidget { background-color: #1e1e1e; color: #dcdcdc; }
+QGroupBox { border: 1px solid #444; border-radius: 4px; margin-top: 8px; padding-top: 14px; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #dcdcdc; }
+QTabWidget::pane { border: 1px solid #444; }
+QTabBar::tab { background: #2d2d2d; color: #dcdcdc; padding: 6px 14px; border: 1px solid #444;
+               border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+QTabBar::tab:selected { background: #1e1e1e; }
+QTabBar::tab:!selected { margin-top: 2px; }
+QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit { background: #2d2d2d; color: #dcdcdc;
+               border: 1px solid #555; border-radius: 3px; padding: 2px; }
+QScrollArea { border: none; }
+QPushButton { background: #333; color: #dcdcdc; border: 1px solid #555; border-radius: 3px; padding: 5px 12px; }
+QPushButton:hover { background: #444; }
+QCheckBox { color: #dcdcdc; }
+QLabel { color: #dcdcdc; }
+QMessageBox { background-color: #1e1e1e; }
+QStatusBar { background: #2d2d2d; color: #aaa; }
+QToolTip { background: #2d2d2d; color: #dcdcdc; border: 1px solid #555; }
+"""
+
+_LIGHT_STYLE = ""
 
 # Vanilla game defaults — unmodded behavior (used by "Reset to Vanilla" button)
 VANILLA_DEFAULTS = {
@@ -666,6 +689,10 @@ class Configurator(QMainWindow):
         self._auto_update_cb.setChecked(_load_settings().get("auto_update_check", True))
         self._auto_update_cb.stateChanged.connect(self._on_auto_update_toggled)
         slay.addWidget(self._auto_update_cb)
+        self._dark_mode_cb = QCheckBox("Dark Mode")
+        self._dark_mode_cb.setChecked(_load_settings().get("dark_mode", True))
+        self._dark_mode_cb.stateChanged.connect(self._on_dark_mode_toggled)
+        slay.addWidget(self._dark_mode_cb)
         slay.addSpacing(8)
         mascot_data = base64.b64decode(_MASCOT_B64)
         mascot_pix = QPixmap()
@@ -728,6 +755,9 @@ class Configurator(QMainWindow):
         self._on_vanilla_beast_toggled(None)
         self._on_dispel_toggled(None)
 
+        # Apply theme
+        self._apply_theme()
+
         # Auto-check for updates on startup (if enabled)
         if self._auto_update_cb.isChecked():
             self._update_checker = UpdateChecker()
@@ -740,6 +770,18 @@ class Configurator(QMainWindow):
         data = _load_settings()
         data["auto_update_check"] = self._auto_update_cb.isChecked()
         _save_settings(data)
+
+    def _on_dark_mode_toggled(self, _state):
+        """Persist dark mode preference and apply theme."""
+        data = _load_settings()
+        data["dark_mode"] = self._dark_mode_cb.isChecked()
+        _save_settings(data)
+        self._apply_theme()
+
+    def _apply_theme(self):
+        """Apply dark or light theme to the application."""
+        dark = self._dark_mode_cb.isChecked()
+        QApplication.instance().setStyleSheet(_DARK_STYLE if dark else _LIGHT_STYLE)
 
     def _on_update_available(self, remote_version: str):
         """Show update prompt when a newer version is found on GitHub."""
