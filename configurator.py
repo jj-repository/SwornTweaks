@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.9"
+VERSION = "1.9.0"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -103,6 +103,7 @@ QTabBar::tab {{ background: #2d2d2d; color: #dcdcdc; padding: 6px 14px; border: 
                border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }}
 QTabBar::tab:selected {{ background: #1e1e1e; }}
 QTabBar::tab:!selected {{ margin-top: 2px; }}
+QTabBar::tab:disabled {{ background: transparent; border: none; min-width: 40px; max-width: 40px; }}
 QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit {{ background: #2d2d2d; color: #dcdcdc;
                border: 1px solid #555; border-radius: 3px; padding: 2px; }}
 QScrollArea {{ border: none; }}
@@ -767,6 +768,14 @@ class Configurator(QMainWindow):
         mlay.addStretch()
         self._tabs.addTab(_scroll_tab(modes_page), "Game Modes")
 
+        # Invisible spacer tab for visual gap between Game Modes and Settings
+        self._tabs.addTab(QWidget(), "")
+        _spacer_idx = self._tabs.count() - 1
+        self._tabs.setTabEnabled(_spacer_idx, False)
+        self._tabs.setStyleSheet(self._tabs.styleSheet())  # force refresh
+        self._tabs.tabBar().setTabButton(_spacer_idx, self._tabs.tabBar().ButtonPosition.LeftSide, None)
+        self._tabs.tabBar().setTabButton(_spacer_idx, self._tabs.tabBar().ButtonPosition.RightSide, None)
+
         settings_page = QWidget()
         slay = QVBoxLayout(settings_page)
         version_label = QLabel(f"SwornTweaks Configurator v{VERSION}")
@@ -922,28 +931,6 @@ class Configurator(QMainWindow):
 
         hlay.addStretch()
         self._tabs.addTab(_scroll_tab(help_page), "Help")
-
-        # Hide Settings and Help from the tab bar — they're accessed via corner buttons
-        self._tabs.tabBar().setTabVisible(4, False)
-        self._tabs.tabBar().setTabVisible(5, False)
-
-        # Right-aligned corner buttons for Settings and Help
-        corner_widget = QWidget()
-        corner_lay = QHBoxLayout(corner_widget)
-        corner_lay.setContentsMargins(0, 0, 0, 0)
-        corner_lay.setSpacing(4)
-        settings_corner = QPushButton("Settings")
-        settings_corner.setStyleSheet(
-            "QPushButton { font-weight: bold; padding: 4px 12px; }")
-        settings_corner.clicked.connect(lambda: self._tabs.setCurrentIndex(4))
-        corner_lay.addWidget(settings_corner)
-        help_corner = QPushButton("Help")
-        help_corner.setStyleSheet(
-            "QPushButton { background-color: #c62828; color: white; font-weight: bold; padding: 4px 12px; }"
-            "QPushButton:hover { background-color: #d32f2f; }")
-        help_corner.clicked.connect(lambda: self._tabs.setCurrentIndex(5))
-        corner_lay.addWidget(help_corner)
-        self._tabs.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
 
         outer.addWidget(self._tabs)
 
