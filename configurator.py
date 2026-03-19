@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.5"
+VERSION = "1.8.6"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -1556,7 +1556,16 @@ class Configurator(QMainWindow):
             "SwornTweaks has been updated.\n\n"
             "The configurator will now restart.")
         import subprocess
-        if IS_FROZEN:
+        if IS_FROZEN and platform.system() == "Windows":
+            # On Windows, use cmd with a short delay to ensure the old
+            # process fully exits before the new exe starts.
+            exe = str(Path(sys.executable).resolve())
+            subprocess.Popen(
+                f'cmd /c timeout /t 2 /nobreak >nul & start "" "{exe}"',
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        elif IS_FROZEN:
             subprocess.Popen([sys.executable])
         else:
             subprocess.Popen([sys.executable] + sys.argv)
