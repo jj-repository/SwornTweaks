@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.4"
+VERSION = "1.8.5"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -41,28 +41,82 @@ GITHUB_EXE = f"https://github.com/{GITHUB_REPO}/releases/latest/download/{_EXE_A
 SECTION = "SwornTweaks"
 IS_FROZEN = getattr(sys, "frozen", False)  # True when running as PyInstaller .exe
 
-_DARK_STYLE = """
-QWidget { background-color: #1e1e1e; color: #dcdcdc; }
-QGroupBox { border: 1px solid #444; border-radius: 4px; margin-top: 8px; padding-top: 14px; }
-QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #dcdcdc; }
-QTabWidget::pane { border: 1px solid #444; }
-QTabBar::tab { background: #2d2d2d; color: #dcdcdc; padding: 6px 14px; border: 1px solid #444;
-               border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }
-QTabBar::tab:selected { background: #1e1e1e; }
-QTabBar::tab:!selected { margin-top: 2px; }
-QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit { background: #2d2d2d; color: #dcdcdc;
-               border: 1px solid #555; border-radius: 3px; padding: 2px; }
-QScrollArea { border: none; }
-QPushButton { background: #333; color: #dcdcdc; border: 1px solid #555; border-radius: 3px; padding: 5px 12px; }
-QPushButton:hover { background: #444; }
-QCheckBox { color: #dcdcdc; }
-QLabel { color: #dcdcdc; }
-QMessageBox { background-color: #1e1e1e; }
-QStatusBar { background: #2d2d2d; color: #aaa; }
-QToolTip { background: #2d2d2d; color: #dcdcdc; border: 1px solid #555; }
-"""
-
 _LIGHT_STYLE = ""
+
+
+def _make_checkbox_images() -> tuple[str, str]:
+    """Generate checked/unchecked checkbox images and return their file paths."""
+    import tempfile
+    d = tempfile.mkdtemp(prefix="sworntweaks_")
+
+    size = 18
+    # Unchecked: empty dark box with border
+    unchecked = QPixmap(size, size)
+    unchecked.fill(QColor(0, 0, 0, 0))
+    p = QPainter(unchecked)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(136, 136, 136), 2))
+    p.setBrush(QColor(45, 45, 45))
+    p.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3)
+    p.end()
+    unchecked_path = os.path.join(d, "cb_unchecked.png")
+    unchecked.save(unchecked_path)
+
+    # Checked: green box with white checkmark
+    checked = QPixmap(size, size)
+    checked.fill(QColor(0, 0, 0, 0))
+    p = QPainter(checked)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(46, 125, 50))
+    p.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3)
+    pen = QPen(QColor(255, 255, 255), 2.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    from PyQt6.QtGui import QPainterPath
+    path = QPainterPath()
+    path.moveTo(4, 9)
+    path.lineTo(7.5, 13)
+    path.lineTo(14, 5)
+    p.drawPath(path)
+    p.end()
+    checked_path = os.path.join(d, "cb_checked.png")
+    checked.save(checked_path)
+
+    return checked_path, unchecked_path
+
+
+def _build_dark_style() -> str:
+    """Build the dark stylesheet with generated checkbox images."""
+    checked, unchecked = _make_checkbox_images()
+    # Qt stylesheets need forward slashes in paths on all platforms
+    checked = checked.replace("\\", "/")
+    unchecked = unchecked.replace("\\", "/")
+    return f"""
+QWidget {{ background-color: #1e1e1e; color: #dcdcdc; }}
+QGroupBox {{ border: 1px solid #444; border-radius: 4px; margin-top: 8px; padding-top: 14px; }}
+QGroupBox::title {{ subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #dcdcdc; }}
+QTabWidget::pane {{ border: 1px solid #444; }}
+QTabBar::tab {{ background: #2d2d2d; color: #dcdcdc; padding: 6px 14px; border: 1px solid #444;
+               border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }}
+QTabBar::tab:selected {{ background: #1e1e1e; }}
+QTabBar::tab:!selected {{ margin-top: 2px; }}
+QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit {{ background: #2d2d2d; color: #dcdcdc;
+               border: 1px solid #555; border-radius: 3px; padding: 2px; }}
+QScrollArea {{ border: none; }}
+QPushButton {{ background: #333; color: #dcdcdc; border: 1px solid #555; border-radius: 3px; padding: 5px 12px; }}
+QPushButton:hover {{ background: #444; }}
+QCheckBox {{ color: #dcdcdc; spacing: 6px; }}
+QCheckBox::indicator {{ width: 18px; height: 18px; }}
+QCheckBox::indicator:unchecked {{ image: url({unchecked}); }}
+QCheckBox::indicator:checked {{ image: url({checked}); }}
+QLabel {{ color: #dcdcdc; }}
+QMessageBox {{ background-color: #1e1e1e; }}
+QStatusBar {{ background: #2d2d2d; color: #aaa; }}
+QToolTip {{ background: #2d2d2d; color: #dcdcdc; border: 1px solid #555; }}
+"""
 
 # Vanilla game defaults — unmodded behavior (used by "Reset to Vanilla" button)
 VANILLA_DEFAULTS = {
@@ -708,13 +762,78 @@ class Configurator(QMainWindow):
         slay.addStretch()
         self._tabs.addTab(_scroll_tab(settings_page), "Settings")
 
-        # Help button as corner widget on the tab bar
+        # ── Help tab ───────────────────────────────────────────────
+        help_page = QWidget()
+        hlay = QVBoxLayout(help_page)
+
+        help_title = QLabel("SwornTweaks Help")
+        help_title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        hlay.addWidget(help_title)
+        hlay.addSpacing(8)
+
+        help_btns = QHBoxLayout()
+        readme_btn = QPushButton("Readme")
+        readme_btn.setToolTip("Open install instructions and documentation on GitHub")
+        readme_btn.setStyleSheet("QPushButton { background-color: #1565c0; color: white; font-weight: bold; }"
+                                 "QPushButton:hover { background-color: #1976d2; }")
+        readme_btn.clicked.connect(self._open_help)
+        help_btns.addWidget(readme_btn)
+        report_btn = QPushButton("Report Bug")
+        report_btn.setToolTip("Open a bug report on GitHub")
+        report_btn.setStyleSheet("QPushButton { background-color: #f9a825; color: #1e1e1e; font-weight: bold; }"
+                                 "QPushButton:hover { background-color: #fbc02d; }")
+        report_btn.clicked.connect(self._report_bug)
+        help_btns.addWidget(report_btn)
+        logs_btn = QPushButton("Open Logs Folder")
+        logs_btn.setToolTip("Open MelonLoader logs folder — attach Latest.log to bug reports")
+        logs_btn.clicked.connect(self._open_logs_folder)
+        help_btns.addWidget(logs_btn)
+        help_btns.addStretch()
+        hlay.addLayout(help_btns)
+        hlay.addSpacing(12)
+
+        # Separator
+        sep = QLabel()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background-color: #444;")
+        hlay.addWidget(sep)
+        hlay.addSpacing(8)
+
+        help_sections = [
+            ("Player", "Adjust player health and damage multipliers, toggle infinite mana or invincibility. "
+                        "Set bonus rerolls, tweak blessing rarity percentages, and add extra blessings per room."),
+            ("Enemies", "Scale boss, beast, and regular enemy health and damage independently. "
+                        "Adjust enemy spawn intensity per room."),
+            ("Toggles", "Quick on/off switches for quality-of-life features: free gems, Ring of Dispel unlock, "
+                        "unlimited gold, skip Somewhere, guaranteed Fae Realm portals, and Sword in the Stone."),
+            ("Game Modes", "Boss Rush: fight all bosses back-to-back with configurable scaling and rewards. "
+                           "Extra Biomes: add more combat biomes before Camelot with progressive HP scaling. "
+                           "Extra Bosses: inject additional beast/boss encounters per biome. "
+                           "Fight Boss: force-load a specific boss for practice or testing."),
+            ("Settings", "Update the mod and configurator from GitHub, reset to vanilla defaults, "
+                         "share or import config codes, export/import .cfg files, and open game folders. "
+                         "Toggle dark mode and auto-update checks."),
+        ]
+        for title_text, desc_text in help_sections:
+            sec_title = QLabel(title_text)
+            sec_title.setStyleSheet("font-size: 13px; font-weight: bold;")
+            hlay.addWidget(sec_title)
+            sec_desc = QLabel(desc_text)
+            sec_desc.setWordWrap(True)
+            sec_desc.setStyleSheet("color: gray; font-size: 11px; margin-left: 8px;")
+            hlay.addWidget(sec_desc)
+            hlay.addSpacing(6)
+
+        hlay.addStretch()
+        self._tabs.addTab(_scroll_tab(help_page), "Help")
+
+        # Help corner button — switches to the Help tab
         help_corner = QPushButton("Help")
         help_corner.setStyleSheet(
             "QPushButton { background-color: #c62828; color: white; font-weight: bold; padding: 4px 12px; }"
             "QPushButton:hover { background-color: #d32f2f; }"
         )
-        help_corner.clicked.connect(self._open_help)
+        help_corner.clicked.connect(lambda: self._tabs.setCurrentIndex(self._tabs.count() - 1))
         self._tabs.setCornerWidget(help_corner, Qt.Corner.TopRightCorner)
 
         outer.addWidget(self._tabs)
@@ -725,13 +844,6 @@ class Configurator(QMainWindow):
         copyright_label = QLabel("\u00a9 JJ")
         copyright_label.setStyleSheet("color: gray;")
         bottom.addWidget(copyright_label)
-        bug_btn = QPushButton("Report Bug")
-        bug_btn.setToolTip("Open a bug report on GitHub")
-        bug_btn.setStyleSheet("QPushButton { background-color: #b71c1c; color: white; font-weight: bold; }"
-                              "QPushButton:hover { background-color: #c62828; }")
-        bug_btn.clicked.connect(self._report_bug)
-        bottom.addWidget(bug_btn)
-
         bottom.addStretch()
 
         save_btn = QPushButton("Save Config")
@@ -783,7 +895,12 @@ class Configurator(QMainWindow):
     def _apply_theme(self):
         """Apply dark or light theme to the application."""
         dark = self._dark_mode_cb.isChecked()
-        QApplication.instance().setStyleSheet(_DARK_STYLE if dark else _LIGHT_STYLE)
+        if dark:
+            if not hasattr(self, "_dark_style_cache"):
+                self._dark_style_cache = _build_dark_style()
+            QApplication.instance().setStyleSheet(self._dark_style_cache)
+        else:
+            QApplication.instance().setStyleSheet(_LIGHT_STYLE)
 
     def _on_update_available(self, remote_version: str):
         """Show update prompt when a newer version is found on GitHub."""
@@ -1205,6 +1322,15 @@ class Configurator(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.cfg_path.parent)))
         else:
             QMessageBox.warning(self, "Error", "Config folder not found.")
+
+    def _open_logs_folder(self):
+        """Open the MelonLoader logs folder for bug report attachments."""
+        if self.game_path:
+            logs = self.game_path / "MelonLoader"
+            if logs.is_dir():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(logs)))
+                return
+        QMessageBox.warning(self, "Error", "MelonLoader folder not found.")
 
     def _export_cfg(self):
         """Save a copy of the current config to a user-chosen location."""
