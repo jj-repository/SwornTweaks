@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.8.7"
+VERSION = "1.8.8"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -922,24 +922,6 @@ class Configurator(QMainWindow):
 
         hlay.addStretch()
         self._tabs.addTab(_scroll_tab(help_page), "Help")
-
-        # Corner buttons on the tab bar — Settings and Help
-        corner_widget = QWidget()
-        corner_lay = QHBoxLayout(corner_widget)
-        corner_lay.setContentsMargins(0, 0, 0, 0)
-        corner_lay.setSpacing(4)
-        settings_corner = QPushButton("Settings")
-        settings_corner.setStyleSheet(
-            "QPushButton { font-weight: bold; padding: 4px 12px; }")
-        settings_corner.clicked.connect(lambda: self._tabs.setCurrentIndex(4))
-        corner_lay.addWidget(settings_corner)
-        help_corner = QPushButton("Help")
-        help_corner.setStyleSheet(
-            "QPushButton { background-color: #c62828; color: white; font-weight: bold; padding: 4px 12px; }"
-            "QPushButton:hover { background-color: #d32f2f; }")
-        help_corner.clicked.connect(lambda: self._tabs.setCurrentIndex(5))
-        corner_lay.addWidget(help_corner)
-        self._tabs.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
 
         outer.addWidget(self._tabs)
 
