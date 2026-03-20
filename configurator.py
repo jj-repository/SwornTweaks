@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.9.6"
+VERSION = "1.9.7"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -2393,12 +2393,15 @@ class Configurator(QMainWindow):
             self, "Up to Date",
             f"You already have the latest version (v{VERSION}).")
 
-    def _do_update(self):
-        """Download latest DLL and configurator (exe or .py depending on mode)."""
-        if IS_FROZEN:
-            self._update_results = {"dll": None, "exe": None}
-        else:
-            self._update_results = {"dll": None, "cfg": None}
+    def _do_update(self, update_configurator: bool = True):
+        """Download latest DLL and optionally the configurator."""
+        self._update_results = {"dll": None}
+
+        if update_configurator:
+            if IS_FROZEN:
+                self._update_results["exe"] = None
+            else:
+                self._update_results["cfg"] = None
 
         # Download DLL
         dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll")
@@ -2407,24 +2410,23 @@ class Configurator(QMainWindow):
         self._workers.append(dll_worker)
         dll_worker.start()
 
-        if IS_FROZEN:
-            # Running as compiled .exe — download new exe from GitHub releases.
-            # DownloadWorker renames the running .exe aside (.old) and puts the
-            # new one in place (Windows allows renaming a running .exe).
-            exe_path = Path(sys.executable).resolve()
-            exe_worker = DownloadWorker(GITHUB_EXE, exe_path)
-            exe_worker.download_finished.connect(lambda p: self._on_download_done("exe", p))
-            exe_worker.download_error.connect(lambda e: self._on_download_fail("exe", "Configurator", e))
-            self._workers.append(exe_worker)
-            exe_worker.start()
-        else:
-            # Running as .py script — safe to self-update and restart.
-            script_path = Path(sys.argv[0]).resolve()
-            cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
-            cfg_worker.download_finished.connect(lambda p: self._on_download_done("cfg", p))
-            cfg_worker.download_error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
-            self._workers.append(cfg_worker)
-            cfg_worker.start()
+        if update_configurator:
+            if IS_FROZEN:
+                # Running as compiled .exe — download new exe from GitHub releases.
+                exe_path = Path(sys.executable).resolve()
+                exe_worker = DownloadWorker(GITHUB_EXE, exe_path)
+                exe_worker.download_finished.connect(lambda p: self._on_download_done("exe", p))
+                exe_worker.download_error.connect(lambda e: self._on_download_fail("exe", "Configurator", e))
+                self._workers.append(exe_worker)
+                exe_worker.start()
+            else:
+                # Running as .py script — safe to self-update and restart.
+                script_path = Path(sys.argv[0]).resolve()
+                cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
+                cfg_worker.download_finished.connect(lambda p: self._on_download_done("cfg", p))
+                cfg_worker.download_error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
+                self._workers.append(cfg_worker)
+                cfg_worker.start()
 
         self.statusBar().showMessage("Downloading update...", 0)
 
@@ -2438,7 +2440,7 @@ class Configurator(QMainWindow):
         self._check_update_complete()
 
     def _check_update_complete(self):
-        """Called after each download finishes. Acts when both are done."""
+        """Called after each download finishes. Acts when all are done."""
         if any(v is None for v in self._update_results.values()):
             return  # still waiting
         self._workers.clear()
@@ -2447,9 +2449,17 @@ class Configurator(QMainWindow):
             self.statusBar().showMessage("Update finished with errors", 5000)
             return
 
-        if IS_FROZEN and platform.system() == "Windows":
+        configurator_updated = "exe" in self._update_results or "cfg" in self._update_results
+
+        if not configurator_updated:
+            # DLL-only update — no need to restart
+            self.statusBar().showMessage("DLL updated", 5000)
+            QMessageBox.information(
+                self, "DLL Updated",
+                "SwornTweaks.dll has been updated.\n\n"
+                "No configurator restart needed.")
+        elif IS_FROZEN and platform.system() == "Windows":
             # Auto-restart is unreliable with PyInstaller --onefile on Windows.
-            # The exe is memory-mapped by the OS and subprocess launches fail silently.
             self.statusBar().showMessage("Update complete", 5000)
             QMessageBox.information(
                 self, "Updated",
