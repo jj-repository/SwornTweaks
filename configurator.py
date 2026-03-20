@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.9.3"
+VERSION = "1.9.4"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -2453,14 +2453,23 @@ class Configurator(QMainWindow):
             "SwornTweaks has been updated.\n\n"
             "The configurator will now restart.")
         import subprocess
-        if IS_FROZEN and platform.system() == "Windows":
-            # os.startfile is Windows' native launch — fully detached,
-            # no shell needed, survives parent exit.
-            os.startfile(str(Path(sys.executable).resolve()))
-        elif IS_FROZEN:
-            subprocess.Popen([sys.executable])
-        else:
-            subprocess.Popen([sys.executable] + sys.argv)
+        exe = str(Path(sys.executable).resolve())
+        try:
+            if IS_FROZEN and platform.system() == "Windows":
+                subprocess.Popen(
+                    [exe],
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                    close_fds=True,
+                )
+            elif IS_FROZEN:
+                subprocess.Popen([exe])
+            else:
+                subprocess.Popen([sys.executable] + sys.argv)
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Restart Failed",
+                f"Could not restart automatically:\n{e}\n\n"
+                f"Please reopen the configurator manually.")
         QApplication.instance().quit()
 
 
