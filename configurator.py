@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.9.7"
+VERSION = "1.9.8"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -1812,7 +1812,7 @@ class Configurator(QMainWindow):
             "(Downloads the latest DLL and configurator from GitHub)",
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._do_update()
+            self._do_update(remote_version)
 
     # ── Game path ────────────────────────────────────────────────
 
@@ -2378,7 +2378,7 @@ class Configurator(QMainWindow):
             "Download and install the update?",
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._do_update()
+            self._do_update(remote_version)
         else:
             self._workers.clear()
 
@@ -2393,8 +2393,18 @@ class Configurator(QMainWindow):
             self, "Up to Date",
             f"You already have the latest version (v{VERSION}).")
 
-    def _do_update(self, update_configurator: bool = True):
-        """Download latest DLL and optionally the configurator."""
+    def _do_update(self, remote_version: str = ""):
+        """Download latest DLL and configurator if its version is newer."""
+        # Compare versions to decide if the configurator exe/py needs updating
+        update_configurator = False
+        if remote_version:
+            try:
+                remote_tuple = tuple(map(int, remote_version.split(".")))
+                local_tuple = tuple(map(int, VERSION.split(".")))
+                update_configurator = remote_tuple > local_tuple
+            except (ValueError, TypeError):
+                update_configurator = True  # can't compare, update to be safe
+
         self._update_results = {"dll": None}
 
         if update_configurator:
