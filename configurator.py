@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.9.0"
+VERSION = "1.9.1"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -41,7 +41,31 @@ GITHUB_EXE = f"https://github.com/{GITHUB_REPO}/releases/latest/download/{_EXE_A
 SECTION = "SwornTweaks"
 IS_FROZEN = getattr(sys, "frozen", False)  # True when running as PyInstaller .exe
 
-_LIGHT_STYLE = ""
+_LIGHT_STYLE = """
+QWidget { background-color: #f0f0f0; color: #1e1e1e; }
+QGroupBox { border: 1px solid #bbb; border-radius: 4px; margin-top: 8px; padding-top: 14px; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #1e1e1e; }
+QTabWidget::pane { border: 1px solid #bbb; }
+QTabBar::tab { background: #e0e0e0; color: #1e1e1e; padding: 6px 14px; border: 1px solid #bbb;
+               border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+QTabBar::tab:selected { background: #f0f0f0; }
+QTabBar::tab:!selected { margin-top: 2px; }
+QTabBar::tab:disabled { background: transparent; border: none; min-width: 40px; max-width: 40px; }
+QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit { background: #ffffff; color: #1e1e1e;
+               border: 1px solid #bbb; border-radius: 3px; padding: 2px; }
+QScrollArea { border: none; }
+QPushButton { background: #e0e0e0; color: #1e1e1e; border: 1px solid #bbb; border-radius: 3px; padding: 5px 12px; }
+QPushButton:hover { background: #d0d0d0; }
+QCheckBox { color: #1e1e1e; }
+QCheckBox::indicator { width: 14px; height: 14px; border: 2px solid #888; border-radius: 3px; background: #ffffff; }
+QCheckBox::indicator:checked { background: #2e7d32; border-color: #2e7d32; }
+QCheckBox::indicator:unchecked:hover { border-color: #555; }
+QCheckBox::indicator:disabled { background: #e0e0e0; border-color: #bbb; }
+QLabel { color: #1e1e1e; }
+QMessageBox { background-color: #f0f0f0; }
+QStatusBar { background: #e0e0e0; color: #555; }
+QToolTip { background: #ffffcc; color: #1e1e1e; border: 1px solid #bbb; }
+"""
 
 
 def _make_checkbox_images() -> tuple[str, str]:
