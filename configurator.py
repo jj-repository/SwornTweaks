@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.9.5"
+VERSION = "1.9.6"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -2447,30 +2447,26 @@ class Configurator(QMainWindow):
             self.statusBar().showMessage("Update finished with errors", 5000)
             return
 
-        self.statusBar().showMessage("Update complete — restarting…", 5000)
-        QMessageBox.information(
-            self, "Updated",
-            "SwornTweaks has been updated.\n\n"
-            "The configurator will now restart.")
-        import subprocess
-        exe = str(Path(sys.executable).resolve())
-        try:
-            if IS_FROZEN and platform.system() == "Windows":
-                subprocess.Popen(
-                    [exe],
-                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-                    close_fds=True,
-                )
-            elif IS_FROZEN:
-                subprocess.Popen([exe])
+        if IS_FROZEN and platform.system() == "Windows":
+            # Auto-restart is unreliable with PyInstaller --onefile on Windows.
+            # The exe is memory-mapped by the OS and subprocess launches fail silently.
+            self.statusBar().showMessage("Update complete", 5000)
+            QMessageBox.information(
+                self, "Updated",
+                "SwornTweaks has been updated.\n\n"
+                "Please close and reopen the configurator to use the new version.")
+        else:
+            self.statusBar().showMessage("Update complete — restarting…", 5000)
+            QMessageBox.information(
+                self, "Updated",
+                "SwornTweaks has been updated.\n\n"
+                "The configurator will now restart.")
+            import subprocess
+            if IS_FROZEN:
+                subprocess.Popen([sys.executable])
             else:
                 subprocess.Popen([sys.executable] + sys.argv)
-        except Exception as e:
-            QMessageBox.warning(
-                self, "Restart Failed",
-                f"Could not restart automatically:\n{e}\n\n"
-                f"Please reopen the configurator manually.")
-        QApplication.instance().quit()
+            QApplication.instance().quit()
 
 
 def main():
