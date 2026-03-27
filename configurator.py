@@ -1184,15 +1184,40 @@ def save_game_path(path: Path):
     _save_settings(data)
 
 
+def _compute_git_blob_sha(content: bytes) -> str:
+    """Compute git blob SHA1 (same as git hash-object)."""
+    import hashlib
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content).hexdigest()
+
+
+def _verify_file_against_github(ref: str, filename: str, content: bytes) -> None:
+    """Verify content matches GitHub's git tree SHA for the given ref."""
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}?ref={ref}"
+    req = urllib.request.Request(api_url, headers={"User-Agent": "SwornTweaks"})
+    with urllib.request.urlopen(req, timeout=30, context=_ssl_ctx) as resp:
+        file_info = json.loads(resp.read().decode())
+    expected_sha = file_info.get('sha', '')
+    actual_sha = _compute_git_blob_sha(content)
+    if actual_sha != expected_sha:
+        raise RuntimeError(
+            f"Integrity check failed for {filename}!\n"
+            f"Expected SHA: {expected_sha[:16]}...\n"
+            f"Got SHA: {actual_sha[:16]}..."
+        )
+
+
 class DownloadWorker(QThread):
     """Background thread for downloading files from GitHub."""
     download_finished = pyqtSignal(str)
     download_error = pyqtSignal(str)
 
-    def __init__(self, url: str, dest: Path):
+    def __init__(self, url: str, dest: Path, verify_ref: str = "", verify_filename: str = ""):
         super().__init__()
         self.url = url
         self.dest = dest
+        self.verify_ref = verify_ref
+        self.verify_filename = verify_filename
 
     def run(self):
         try:
@@ -1203,7 +1228,9 @@ class DownloadWorker(QThread):
                 data = resp.read(_MAX_DOWNLOAD_BYTES + 1)
                 if len(data) > _MAX_DOWNLOAD_BYTES:
                     raise RuntimeError("Download exceeds 50 MB safety limit")
-                tmp.write_bytes(data)
+            if self.verify_ref and self.verify_filename:
+                _verify_file_against_github(self.verify_ref, self.verify_filename, data)
+            tmp.write_bytes(data)
             # On Windows, you can't overwrite a running exe, but you CAN
             # rename it. Move the old file aside, put the new one in place.
             # Use a unique .old name to avoid conflicts with locked files
@@ -2414,7 +2441,8 @@ class Configurator(QMainWindow):
                 self._update_results["cfg"] = None
 
         # Download DLL
-        dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll")
+        dll_worker = DownloadWorker(GITHUB_DLL, self.mods_path / "SwornTweaks.dll",
+                                    verify_ref="main", verify_filename="SwornTweaks.dll")
         dll_worker.download_finished.connect(lambda p: self._on_download_done("dll", p))
         dll_worker.download_error.connect(lambda e: self._on_download_fail("dll", "DLL", e))
         self._workers.append(dll_worker)
@@ -2432,7 +2460,8 @@ class Configurator(QMainWindow):
             else:
                 # Running as .py script — safe to self-update and restart.
                 script_path = Path(sys.argv[0]).resolve()
-                cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path)
+                cfg_worker = DownloadWorker(GITHUB_CONFIGURATOR, script_path,
+                                            verify_ref="main", verify_filename="configurator.py")
                 cfg_worker.download_finished.connect(lambda p: self._on_download_done("cfg", p))
                 cfg_worker.download_error.connect(lambda e: self._on_download_fail("cfg", "Configurator", e))
                 self._workers.append(cfg_worker)
