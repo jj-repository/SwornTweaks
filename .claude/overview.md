@@ -1,6 +1,6 @@
 # Overview
 
-v1.10.1 — Single DLL consolidating multiple SWORN mods + PyQt6 configurator GUI. Game: SWORN (Steam 1763250), MelonLoader required.
+v1.11 — Single DLL consolidating multiple SWORN mods + PyQt6 configurator GUI. Game: SWORN (Steam 1763250), MelonLoader required.
 
 ## Files
 - `Core.cs` — MelonMod entry point
