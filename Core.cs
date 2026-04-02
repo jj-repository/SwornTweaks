@@ -25,7 +25,7 @@ namespace SwornTweaks
             LoggerInstance.Msg($"  FaeKiss: {Config.GuaranteedFaeKiss.Value}, FaeKissCurse: {Config.GuaranteedFaeKissCurse.Value}");
             LoggerInstance.Msg($"  SkipSomewhere: {Config.SkipSomewhere.Value}");
             LoggerInstance.Msg($"  BossRush: {Config.BossRushMode.Value}, Horns: {Config.BossRushHornRewards.Value}, Blessings: {Config.BossRushExtraBlessings.Value}, Heal: {Config.BossRushHealPerRoom.Value}, Scaling: {Config.BossRushScaling.Value}x, Randomizer: {Config.BossRushRandomizer.Value}");
-
+            LoggerInstance.Msg($"  AutoSave: {Config.AutoSaveEnabled.Value}, LoadOnStart: {Config.LoadSaveOnStart.Value}");
         }
 
         public override void OnApplicationQuit()

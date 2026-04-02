@@ -307,18 +307,27 @@ namespace SwornTweaks.Patches
 
     // ── Load trigger: on fresh run start ─────────────────────────
     //
-    // Split into Prefix + Postfix because GeneratePaths fires DURING
-    // ResetBiomeRunData. The skip flags and BiomeIndex must be set
-    // in the Prefix so they're ready before path generation.
+    // GeneratePaths fires DURING ResetBiomeRunData, but the body
+    // likely resets BiomeIndex to 0 before calling it. Strategy:
+    //
+    //   Prefix  → read save, set biome-override + path-skip flags
+    //   Body    → builds m_biomeRunDatas, calls GeneratePaths
+    //             (SaveStateBiomeOverride prefix redirects to saved biome)
+    //             (SaveStatePathSkip postfix trims completed rooms)
+    //   Postfix → set BiomeIndex/RoomIndex/BiomeRoomIndex definitively
+    //             (survives whatever the body did to them)
 
     [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ResetBiomeRunData))]
     [HarmonyPriority(Priority.Low)]
     static class SaveStateLoad
     {
+        // Signaling for biome override (consumed by SaveStateBiomeOverride)
+        internal static bool ShouldOverrideBiome;
+        internal static int TargetBiomeIndex;
+
         // Signaling for path trimming (consumed by SaveStatePathSkip)
         internal static bool ShouldSkipRooms;
         internal static int RoomsToSkip;
-        internal static int DeferredRoomIndex; // set RoomIndex AFTER path generation
 
         // Pending save data for the Postfix to consume
         private static SaveData _pendingSave;
@@ -330,7 +339,7 @@ namespace SwornTweaks.Patches
 
             try
             {
-                if (!Config.AutoSaveEnabled.Value) return;
+                if (!Config.AutoSaveEnabled.Value || !Config.LoadSaveOnStart.Value) return;
 
                 // Only load on fresh run start (BiomeIndex == 0)
                 if (__instance.BiomeIndex != 0) return;
@@ -352,12 +361,13 @@ namespace SwornTweaks.Patches
 
                 MelonLogger.Msg($"[SwornTweaks] [Save] Prefix: loading state from {save.Timestamp} — biome={save.Expedition.BiomeIndex} roomsInBiome={save.Expedition.BiomeRoomIndex}");
 
-                // Set BiomeIndex BEFORE ResetBiomeRunData runs so it initializes
-                // the correct biome and GeneratePaths produces the right path
+                // Set biome override flag so SaveStateBiomeOverride redirects
+                // PathGenerator.GeneratePaths to the saved biome
                 if (save.Expedition.BiomeIndex > 0)
                 {
-                    Traverse.Create(__instance).Property("BiomeIndex").SetValue(save.Expedition.BiomeIndex);
-                    MelonLogger.Msg($"[SwornTweaks] [Save] Set BiomeIndex={save.Expedition.BiomeIndex} in Prefix");
+                    ShouldOverrideBiome = true;
+                    TargetBiomeIndex = save.Expedition.BiomeIndex;
+                    MelonLogger.Msg($"[SwornTweaks] [Save] Will override path generation to biome {save.Expedition.BiomeIndex}");
                 }
 
                 // Set skip flags BEFORE GeneratePaths fires (it runs inside ResetBiomeRunData)
@@ -368,10 +378,8 @@ namespace SwornTweaks.Patches
                     RoomsToSkip = roomsToSkip;
                     MelonLogger.Msg($"[SwornTweaks] [Save] Will skip {roomsToSkip} rooms on next path generation");
                 }
-                DeferredRoomIndex = save.Expedition.RoomIndex;
-                SaveStateTracker.BiomeRoomsCompleted = roomsToSkip;
 
-                // Store for Postfix to handle player restore
+                // Store for Postfix to handle state restore + player restore
                 _pendingSave = save;
             }
             catch (Exception ex)
@@ -388,12 +396,24 @@ namespace SwornTweaks.Patches
 
             try
             {
-                // Restore kill flags (safe to do in Postfix)
+                // Restore expedition state AFTER body ran
+                // (body likely reset BiomeIndex/RoomIndex/BiomeRoomIndex to 0)
                 var t = Traverse.Create(__instance);
+                t.Property("BiomeIndex").SetValue(save.Expedition.BiomeIndex);
+                t.Property("RoomIndex").SetValue(save.Expedition.RoomIndex);
+                t.Property("BiomeRoomIndex").SetValue(save.Expedition.BiomeRoomIndex);
                 t.Property("HasKilledArthurThisRun").SetValue(save.Expedition.HasKilledArthur);
                 t.Property("HasKilledMorganaThisRun").SetValue(save.Expedition.HasKilledMorgana);
 
-                MelonLogger.Msg($"[SwornTweaks] [Save] Postfix: expedition restored — biome={save.Expedition.BiomeIndex} roomsInBiome={save.Expedition.BiomeRoomIndex} (RoomIndex={save.Expedition.RoomIndex} deferred)");
+                // Sync biome room counter
+                SaveStateTracker.BiomeRoomsCompleted = save.Expedition.BiomeRoomIndex;
+
+                MelonLogger.Msg($"[SwornTweaks] [Save] Postfix: expedition restored — biome={save.Expedition.BiomeIndex} roomIndex={save.Expedition.RoomIndex} biomeRoom={save.Expedition.BiomeRoomIndex}");
+
+                // Auto-reset LoadSaveOnStart so the next fresh run starts clean
+                Config.LoadSaveOnStart.Value = false;
+                MelonPreferences.Save();
+                MelonLogger.Msg("[SwornTweaks] [Save] LoadSaveOnStart auto-reset to false");
 
                 // Delayed player state restore — entities must exist first
                 MelonCoroutines.Start(DelayedPlayerRestore(save));
@@ -662,6 +682,50 @@ namespace SwornTweaks.Patches
         }
     }
 
+    // ── Biome override: redirect path generation to saved biome ──
+    //
+    // During ResetBiomeRunData the body resets BiomeIndex to 0 and then
+    // calls PathGenerator.GeneratePaths with biome-0 data. This prefix
+    // swaps the biome + biomeRunData params to the saved biome so the
+    // generated path matches where the player actually was.
+
+    [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
+    [HarmonyPriority(Priority.High)] // run before all other path patches
+    static class SaveStateBiomeOverride
+    {
+        static void Prefix(ExpeditionManager expeditionManager,
+                           ref BiomeData biome,
+                           ref PathGenerator.BiomeRunData biomeRunData)
+        {
+            if (!SaveStateLoad.ShouldOverrideBiome) return;
+
+            try
+            {
+                int target = SaveStateLoad.TargetBiomeIndex;
+                var biomes = expeditionManager.biomes;
+                var runDatas = expeditionManager.m_biomeRunDatas;
+
+                if (biomes != null && target < biomes.Count &&
+                    runDatas != null && target < runDatas.Length)
+                {
+                    biome = biomes[target];
+                    biomeRunData = runDatas[target];
+                    MelonLogger.Msg($"[SwornTweaks] [Save] Biome override: redirected path generation to biome {target}");
+                }
+                else
+                {
+                    MelonLogger.Warning($"[SwornTweaks] [Save] Biome override failed: target={target} biomes={biomes?.Count} runDatas={runDatas?.Length}");
+                }
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SwornTweaks] [Save] Biome override error: {ex.Message}");
+            }
+            // Don't clear the flag here — SaveStatePathSkip clears it
+            // once the main biome path (long enough to trim) arrives.
+        }
+    }
+
     // ── Path trimming: skip completed rooms on load ────────────
 
     [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
@@ -680,11 +744,12 @@ namespace SwornTweaks.Patches
             if (paths == null || skip >= paths.Length)
             {
                 MelonLogger.Msg($"[SwornTweaks] [Save] Path too short ({paths?.Length ?? 0}) to skip {skip} — waiting for biome path");
-                return; // do NOT clear ShouldSkipRooms
+                return; // do NOT clear flags
             }
 
-            // This is the real biome path — consume the flag and trim
+            // This is the real biome path — consume all flags and trim
             SaveStateLoad.ShouldSkipRooms = false;
+            SaveStateLoad.ShouldOverrideBiome = false;
 
             int newLen = paths.Length - skip;
             var trimmed = new Il2CppReferenceArray<ExpeditionManager.Path>(newLen);
@@ -693,26 +758,6 @@ namespace SwornTweaks.Patches
             __result = trimmed;
 
             MelonLogger.Msg($"[SwornTweaks] [Save] Skipped {skip} rooms — path: {paths.Length} → {newLen}");
-
-            // Restore deferred RoomIndex now that the real path is trimmed
-            if (SaveStateLoad.DeferredRoomIndex > 0)
-            {
-                int roomIdx = SaveStateLoad.DeferredRoomIndex;
-                SaveStateLoad.DeferredRoomIndex = 0;
-                try
-                {
-                    var em = UnityEngine.Object.FindObjectOfType<ExpeditionManager>();
-                    if (em != null)
-                    {
-                        Traverse.Create(em).Property("RoomIndex").SetValue(roomIdx);
-                        MelonLogger.Msg($"[SwornTweaks] [Save] Restored RoomIndex={roomIdx} after path trimming");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MelonLogger.Warning($"[SwornTweaks] [Save] Failed to restore RoomIndex: {ex.Message}");
-                }
-            }
         }
     }
 

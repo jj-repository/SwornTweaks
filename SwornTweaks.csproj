@@ -10,27 +10,27 @@
   <ItemGroup>
     <!-- MelonLoader core -->
     <Reference Include="MelonLoader">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/net6/MelonLoader.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/net6/MelonLoader.dll</HintPath>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/net6/0Harmony.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/net6/0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Il2CppInterop.Runtime">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/net6/Il2CppInterop.Runtime.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/net6/Il2CppInterop.Runtime.dll</HintPath>
     </Reference>
 
     <!-- IL2CPP game stubs -->
     <Reference Include="Assembly-CSharp">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Assembly-CSharp.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="Il2Cppmscorlib">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Il2Cppmscorlib.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Il2Cppmscorlib.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="Il2CppWindwalk.Core">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Il2CppWindwalk.Core.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Il2CppWindwalk.Core.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>

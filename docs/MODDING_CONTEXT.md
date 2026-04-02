@@ -7,11 +7,11 @@ Complete reference for modding Sworn with MelonLoader. Covers game architecture,
 ## Setup & Environment
 
 ### Paths
-- **Game install**: `/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/`
+- **Game install**: `/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/`
 - **Steam App ID**: 1763250
 - **IL2CPP stubs**: `.../SWORN/MelonLoader/Il2CppAssemblies/Assembly-CSharp.dll` (181 assemblies total)
 - **Mod folder**: `.../SWORN/Mods/` (enabled), `.../SWORN/Mods_Disabled/` (disabled)
-- **Modding workspace**: `/mnt/ext4gamedrive/modding/Sworn/`
+- **Modding workspace**: `/home/ungj/SwornTweaks/`
 
 ### Existing Mods
 
@@ -33,7 +33,7 @@ WINEDLLOVERRIDES="version=n,b" %command%
 MelonLoader intercepts via the Windows `version.dll` hook.
 
 ### Build Process
-1. Create project folder under `/mnt/ext4gamedrive/modding/Sworn/<ModName>/`
+1. Create project folder under `/home/ungj/SwornTweaks/<ModName>/`
 2. Write `Core.cs` + `<ModName>.csproj` using template below
 3. `cd <ModName> && dotnet build -c Release`
 4. Copy `bin/Release/net6.0/<ModName>.dll` to both the project folder and game `Mods/` folder (keep a copy in each)
@@ -51,23 +51,23 @@ MelonLoader intercepts via the Windows `version.dll` hook.
   <ItemGroup>
     <!-- MelonLoader + Harmony -->
     <Reference Include="MelonLoader">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/net6/MelonLoader.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/net6/MelonLoader.dll</HintPath>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/net6/0Harmony.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/net6/0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Il2CppInterop.Runtime">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/net6/Il2CppInterop.Runtime.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/net6/Il2CppInterop.Runtime.dll</HintPath>
     </Reference>
     <!-- IL2CPP game stubs -->
     <Reference Include="Assembly-CSharp">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Assembly-CSharp.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="Il2Cppmscorlib">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Il2Cppmscorlib.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/Il2Cppmscorlib.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>/mnt/ext4gamedrive/SteamLibrary/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>/mnt/c/Program Files (x86)/Steam/steamapps/common/SWORN/MelonLoader/Il2CppAssemblies/UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <!-- Add Il2CppWindwalk.Core.dll if referencing EntityBase/CurrencyManager etc. -->
   </ItemGroup>
@@ -1048,6 +1048,7 @@ CombatRunner (base — RunCombat, ForceEndCombat)
   ├── HordeCombatRunner (horde mode)
   ├── MajorEnemyCombatRunner (legendary beast fights)
   ├── RoundtableCombatRunner (Roundtable knight fights)
+  ├── BossRushCombatRunner (native Boss Rush arena — v1.2.0.0+)
   ├── OnslaughtCombatRunner
   ├── ArenaCombatRunner
   ├── CapturePointCombatRunner / AreaCaptureCombatRunner
@@ -1064,6 +1065,114 @@ CombatRunner (base — RunCombat, ForceEndCombat)
 
 ---
 
+## v1.2.0.0 Update Changes (2026-04-02)
+
+SWORN 1.0 Update #2 — key changes affecting modding.
+
+### Native Boss Rush Mode
+The game now has an official Boss Rush arena in Camelot. Separate from our custom boss rush (which restructures the biome sequence).
+
+**New types:**
+- `BossRushLevelManager` (extends `PortalLevelManager`) — manages the arena encounter, generates random corruptions, tracks rounds
+- `BossRushCombatRunner` (extends `CombatRunner`) — spawns bosses in waves
+- `BossRushPortal` — portal interaction to start/continue boss rush
+- `BossRushLevelManager.BossRushWaveData` — per-wave spawn data + reward type
+
+**ExpeditionManager boss rush state:**
+- `LevelData BossRushArena` — the arena level asset
+- `bool BeatBossRush` (property) — whether player completed native boss rush this run
+- `List<BossRushWaveData> BossRushInfo` — wave configuration
+- `void StartBossRush()` — initiates native boss rush
+- `void SetBossRushAsBeaten()` — marks completion
+
+**BorealisGamemode:**
+- `void StartBossRushMode()` / `StartBossRushInternal()` — triggers native boss rush from gamemode
+
+**SwornTweaks guard:** `BossRushSetup.Prefix` checks `ExpeditionManager.BossRushInfo` to skip our custom boss rush if native is active.
+
+### Dragon Arthur (New Final Boss Variant)
+Dragon Arthur is a second-phase boss form, restricted to the native Boss Rush mode.
+
+**New types:**
+- `DragonLevelManager` (extends `LevelManager`) — has its own `EndGame() → UniTaskVoid`
+- `DragonMob` — dragon-specific mob logic
+- `ArthurDragonHealth` (extends `BossHealth`) — phase 2 health bar
+- Multiple ability classes: `ArthurDragonRingSlamAbility`, `ArthurDragonBeamFanAbility`, `ArthurDragonBiteAbility`, `ArthurDragonSlashAbility`, `ArthurDragonSpiralLinearProjectilesAbility`
+- `DragonPhaseStageController` — manages phase transitions
+- `DragonLevelManager.PlayDragonPhaseCinematicInternal()`, `PlayEndGameCinematicInternal()`, `PlaySecretBiomeCinematicInternal()`
+
+**MobType:** `ArthurDragon = 107`
+
+**SwornTweaks patch:** `DragonEndGameRedirect` intercepts `DragonLevelManager.EndGame()` (same logic as `ArthurEndGameRedirect`).
+
+### Corruption System Rework
+Expanded corruption system with new corruption types and a shrine post-level event. See the Corruption System section above for full API. Key additions in v1.2.0.0:
+- `PostLevelEventType.CorruptionShrine = 21` — players can interact with corruption orbs
+- `ExpeditionManager.m_corruptionManager`, `corruptionWeights`, `usedCorruptionMultiplier`, `unusedCorruptionMultiplier`
+- `ExpeditionManager.NextPathCorruptionAdded` event
+- `TrueBossCorruption` subclass for boss-specific corruptions
+- `EnemyDamageBossCorruption`, `EnemyHealthBossCorruption` — boss-only damage/health modifiers
+
+**Impact on SwornTweaks:** Corruption health/damage modifiers stack with our HealthBoostPatch and PlayerHealthPatch multipliers. Combined effect may be stronger than intended.
+
+### True Ending Keys (New Progression System)
+New collectible system for a "true ending" path.
+
+**Enum: `TrueEndingKeys` (flags)**
+```
+None = 0, CombatKey = 1, GoldKey = 2, HealthKey = 4, AllKeys = 7
+```
+
+**New types:**
+- `EndingKeyRewardEntity` — reward pickup entity for keys
+- `EndingKeyRewardInfo` — key reward metadata
+- `EndingKeyOverlayUI` — HUD indicator
+
+**ExpeditionManager:**
+- `TrueEndingKeys` property/field
+- `MarkTrueEndingKeyAsSeen()` method
+- `SyncSetTrueEndingKeys` RPC
+
+**New RewardTypes:** `EndingKeyCombat = 30`, `EndingKeyGold = 31`, `EndingKeyHealth = 32`
+
+### New Reward Types (TODO: Investigate)
+These new `RewardType` values were added. Need to determine what they are and whether DoorRewardPatch should handle them:
+
+| Value | Name | Notes |
+|---|---|---|
+| 23 | `WarStone` | New stone currency? Related to `MetaCurrencyType.WarStone = 8` |
+| 24 | `TreasureStone` | Related to `MetaCurrencyType.TreasureStone = 9` |
+| 25 | `WealthStone` | Related to `MetaCurrencyType.WealthStone = 10` |
+| 26 | `DevotionStone` | Related to `MetaCurrencyType.DevotionStone = 11` |
+| 28 | `TitaniaBlessing` | Blessing reward from Titania? |
+| 30 | `EndingKeyCombat` | True ending key (combat variant) |
+| 31 | `EndingKeyGold` | True ending key (gold variant) |
+| 32 | `EndingKeyHealth` | True ending key (health variant) |
+| 98 | `HealthCost` | Door that costs health to enter? |
+| 99 | `CurseCost` | Door that costs curse to enter? |
+
+**Action items:**
+- Check in-game what Stone rewards look like and whether they're currency door rewards like FairyEmber/Silk/Moonstone
+- Decide if DoorRewardPatch should replace Stone rewards with Paragon rewards too
+- HealthCost/CurseCost may be door penalties, not rewards — do NOT replace these blindly
+
+### New Room Types
+- `RoomType.Morgana = 13` — dedicated Morgana room type (was previously just `Boss` in Somewhere)
+- `RoomType.Bridge = 14` — new bridge level connecting areas
+
+**Impact:** BossRushRoomOverride now treats `RoomType.Morgana` as a boss-like room for reward purposes.
+
+### New PostLevelEventTypes
+- `SeedSpot = 18` — seed planting spot
+- `MetaCurrencyTrove = 19` — meta-currency trove
+- `BlackKnightCombat = 20` — Black Knight encounter (was previously a different mechanic)
+- `CorruptionShrine = 21` — corruption orb interaction shrine
+
+### BlessingClassification Update
+- New value: `BackUp = 10` — fallback blessing classification slot
+
+---
+
 ## Notes & Gotchas
 
 - **Networked game**: Many state changes go through `SyncXxx` RPC methods. If a patch only runs on the host, clients may desync. Test in solo mode first.
@@ -1071,7 +1180,7 @@ CombatRunner (base — RunCombat, ForceEndCombat)
 - **AnimationCurve**: `intensityCurve` is a Unity `AnimationCurve`. Evaluating it returns a float. You can't easily add keyframes at runtime from a mod without IL2CPP interop for the Unity type.
 - **UniTask**: All combat runners use UniTask for async flow. Don't block the async context with synchronous heavy work.
 - **CancellationToken**: Combat runners pass a `CancellationToken`. If you patch mid-fight, don't break cancellation.
-- **Mono.Cecil for code reading**: Used `/tmp/sworn-inspect/` (Mono.Cecil + .NET 10) to read Assembly-CSharp.dll. ilspycmd requires .NET 8 and doesn't work on this system (.NET 10.0.3 only).
+- **Mono.Cecil for code reading**: Use `/tmp/sworn-inspect/` (Mono.Cecil + .NET 8) to read Assembly-CSharp.dll. Cpp2IL at `/tmp/cpp2il/` can regenerate stubs from GameAssembly.dll + global-metadata.dat when MelonLoader stubs are stale.
 - **WINEDLLOVERRIDES**: Required to activate MelonLoader under Proton. Set in Steam launch options.
 - **`m_biomeRunDatas` is a fixed-size array**: `ExpeditionManager.m_biomeRunDatas` is `Il2CppReferenceArray` created by `ResetBiomeRunData()` matching the original biome count. If you insert into `biomes` after this array is built, the array won't match — the game uses `m_biomeRunDatas[BiomeIndex].BiomeData` to determine the actual biome for path generation, not `biomes[BiomeIndex]`. Any biome insertion must also resize/rebuild `m_biomeRunDatas`.
 - **`remainingEventCounts` doesn't track MajorEnemy**: `BiomeRunData.remainingEventCounts` (keyed by `ObjectiveType`) does NOT contain an `ObjectiveType.MajorEnemy` entry. Beast fights are likely controlled by `BiomeData.majorEnemyCombatData` arrays on the ScriptableObject or hardcoded room slots, not the event count system.

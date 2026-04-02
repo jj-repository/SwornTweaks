@@ -246,6 +246,17 @@ namespace SwornTweaks.Patches
 
                 if (!Config.BossRushMode.Value) return;
 
+                // Skip if the game's native Boss Rush arena is active (v1.2.0.0+)
+                try
+                {
+                    if (__instance.BossRushInfo != null && __instance.BossRushInfo.Count > 0)
+                    {
+                        MelonLogger.Msg("[SwornTweaks] [BossRush] Native Boss Rush detected — skipping custom boss rush setup");
+                        return;
+                    }
+                }
+                catch { /* BossRushInfo not available on older game versions */ }
+
                 var biomes = __instance.biomes;
                 if (biomes == null) return;
 
@@ -493,14 +504,14 @@ namespace SwornTweaks.Patches
                 // Somewhere: no extra rewards at all (Morgana ends the game)
                 if (bt == BiomeType.Somewhere) return;
 
-                // Camelot: only Arthur gets extra rewards, Roundtable stays vanilla
+                // Camelot: Arthur/Dragon rooms get extra rewards, Roundtable/Bridge stays vanilla
                 if (bt == BiomeType.Camelot)
                 {
                     bool isArthur = false;
                     for (int i = 0; i < __result.Length; i++)
                     {
                         var path = __result[i];
-                        if (path != null && path.roomType == RoomType.Arthur)
+                        if (path != null && (path.roomType == RoomType.Arthur || path.roomType == RoomType.Morgana))
                         { isArthur = true; break; }
                     }
                     if (isArthur)
@@ -691,6 +702,44 @@ namespace SwornTweaks.Patches
                     catch (Exception ex)
                     {
                         MelonLogger.Warning($"[SwornTweaks] [BossRush] Arthur NextLevel failed: {ex.Message}");
+                    }
+
+                    return false;
+                }
+                catch { }
+
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Intercept Dragon Arthur's EndGame (v1.2.0.0+): same logic as ArthurEndGameRedirect.
+        /// Dragon Arthur is a separate LevelManager subclass added in the Boss Rush update.
+        /// </summary>
+        [HarmonyPatch(typeof(DragonLevelManager), nameof(DragonLevelManager.EndGame))]
+        static class DragonEndGameRedirect
+        {
+            static bool Prefix(DragonLevelManager __instance)
+            {
+                if (!Config.BossRushMode.Value) return true;
+
+                try
+                {
+                    var em = UnityEngine.Object.FindObjectOfType<ExpeditionManager>();
+                    if (em == null) return true;
+                    int totalBiomes = em.biomes?.Count ?? 0;
+                    if (em.BiomeIndex >= totalBiomes - 1) return true;
+
+                    MelonLogger.Msg($"[SwornTweaks] [BossRush] Intercepting Dragon Arthur EndGame at biome {em.BiomeIndex}/{totalBiomes} — calling NextLevel(0)");
+
+                    try
+                    {
+                        __instance.NextLevel(0);
+                        MelonLogger.Msg("[SwornTweaks] [BossRush] NextLevel(0) called for Dragon Arthur");
+                    }
+                    catch (Exception ex)
+                    {
+                        MelonLogger.Warning($"[SwornTweaks] [BossRush] Dragon Arthur NextLevel failed: {ex.Message}");
                     }
 
                     return false;
