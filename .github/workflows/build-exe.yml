@@ -23,7 +23,7 @@ jobs:
       - name: Build executable
         run: >
           pyinstaller --onefile --windowed
-          --name SwornTweaks-Windows
+          --name SwornTweaks
           --hidden-import certifi
           --collect-data certifi
           configurator.py
@@ -31,8 +31,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SwornTweaks-Windows
-          path: dist/SwornTweaks-Windows.exe
+          name: SwornTweaks
+          path: dist/SwornTweaks.exe
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -78,7 +78,7 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v8
         with:
-          name: SwornTweaks-Windows
+          name: SwornTweaks
           path: release/
 
       - name: Download Linux artifact
@@ -91,6 +91,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/SwornTweaks-Windows.exe
+            release/SwornTweaks.exe
             release/SwornTweaks-Linux
             SwornTweaks.dll
