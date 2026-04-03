@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install PyQt6 pyinstaller certifi
+        run: pip install PyQt6 pyinstaller==6.13.0 certifi
 
       - name: Build executable
         run: >
@@ -26,6 +26,7 @@ jobs:
           --name SwornTweaks
           --hidden-import certifi
           --collect-data certifi
+          --version-file version_info.txt
           configurator.py
 
       - name: Upload artifact
@@ -50,7 +51,7 @@ jobs:
           sudo apt-get install -y libegl1 libxkbcommon0
 
       - name: Install Python dependencies
-        run: pip install PyQt6 pyinstaller certifi
+        run: pip install PyQt6 pyinstaller==6.13.0 certifi
 
       - name: Build executable
         run: >

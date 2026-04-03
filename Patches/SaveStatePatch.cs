@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HarmonyLib;
@@ -19,7 +20,7 @@ namespace SwornTweaks.Patches
     internal class SaveData
     {
         [JsonPropertyName("version")]
-        public int Version { get; set; } = 1;
+        public int Version { get; set; } = 2;
 
         [JsonPropertyName("timestamp")]
         public string Timestamp { get; set; } = "";
@@ -29,6 +30,9 @@ namespace SwornTweaks.Patches
 
         [JsonPropertyName("players")]
         public List<PlayerSaveData> Players { get; set; } = new();
+
+        [JsonPropertyName("roomHistory")]
+        public List<RoomPathSnapshot> RoomHistory { get; set; } = new();
     }
 
     internal class ExpeditionData
@@ -91,19 +95,106 @@ namespace SwornTweaks.Patches
         public int Rarity { get; set; }
     }
 
-    // ── Room counter: track rooms completed per biome ───────────
+    // ── Path snapshot models ────────────────────────────────────
+
+    internal class PathEntryData
+    {
+        [JsonPropertyName("roomType")]
+        public int RoomType { get; set; }
+
+        [JsonPropertyName("levelName")]
+        public string LevelName { get; set; } = "";
+
+        [JsonPropertyName("rewardType")]
+        public int RewardType { get; set; }
+
+        [JsonPropertyName("postLevelEvents")]
+        public List<int> PostLevelEvents { get; set; } = new();
+    }
+
+    internal class RoomPathSnapshot
+    {
+        [JsonPropertyName("nextRoomIndex")]
+        public int NextRoomIndex { get; set; }
+
+        [JsonPropertyName("biomeType")]
+        public string BiomeType { get; set; } = "";
+
+        [JsonPropertyName("paths")]
+        public List<PathEntryData> Paths { get; set; } = new();
+    }
+
+    // ── State tracker ───────────────────────────────────────────
 
     internal static class SaveStateTracker
     {
+        // Room counter for save indexing
         internal static int BiomeRoomsCompleted;
+
+        // Path history recorded during play
+        internal static List<RoomPathSnapshot> RoomHistory = new();
+
+        // True while inside ResetBiomeRunData body (between Prefix/Postfix)
+        internal static bool IsInResetBiomeRunData;
+
+        // Suppresses our patches during warmup GeneratePaths calls
+        internal static bool IsWarmingUp;
+
+        // ── Replay state (active during load) ──
+        internal static bool ReplayActive;
+        internal static int ReplayTargetRoom;        // BiomeRoomIndex to skip to
+        internal static SaveData? ReplaySaveData;     // full save for replay
+        internal static List<RoomPathSnapshot>? SavedRoomHistory; // paths from save
+
+        // LevelData lookup (built once on first replay)
+        internal static Dictionary<string, LevelData>? LevelLookup;
 
         internal static void ResetBiomeCounter()
         {
             BiomeRoomsCompleted = 0;
         }
+
+        internal static void ResetHistory()
+        {
+            RoomHistory.Clear();
+        }
+
+        internal static void ClearReplay()
+        {
+            ReplayActive = false;
+            ReplayTargetRoom = 0;
+            ReplaySaveData = null;
+            SavedRoomHistory = null;
+        }
+
+        internal static void BuildLevelLookup()
+        {
+            if (LevelLookup != null) return;
+            LevelLookup = new Dictionary<string, LevelData>();
+            try
+            {
+                var all = Resources.FindObjectsOfTypeAll<LevelData>();
+                if (all != null)
+                {
+                    foreach (var ld in all)
+                    {
+                        if (ld == null) continue;
+                        string name = ld.name;
+                        if (!string.IsNullOrEmpty(name))
+                            LevelLookup[name] = ld;
+                    }
+                }
+                MelonLogger.Msg($"[SwornTweaks] [Save] Built LevelData lookup: {LevelLookup.Count} entries");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SwornTweaks] [Save] LevelData lookup build failed: {ex.Message}");
+            }
+        }
     }
 
-    // Increment counter before each room transition save
+    // ── Room counter: track rooms completed per biome ───────────
+
     [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ConsumePath))]
     [HarmonyPriority(Priority.High)]
     static class SaveStateRoomCounter
@@ -129,6 +220,7 @@ namespace SwornTweaks.Patches
             try
             {
                 if (!Config.AutoSaveEnabled.Value) return;
+                if (Config.BossRushMode.Value) return; // save/load not supported in BossRush
 
                 if (em == null)
                     em = UnityEngine.Object.FindObjectOfType<ExpeditionManager>();
@@ -169,7 +261,9 @@ namespace SwornTweaks.Patches
                         BiomeRoomIndex = SaveStateTracker.BiomeRoomsCompleted,
                         HasKilledArthur = em.HasKilledArthurThisRun,
                         HasKilledMorgana = em.HasKilledMorganaThisRun,
-                    }
+                    },
+                    // Include current path history
+                    RoomHistory = new List<RoomPathSnapshot>(SaveStateTracker.RoomHistory),
                 };
 
                 int playerIndex = 0;
@@ -291,7 +385,7 @@ namespace SwornTweaks.Patches
                 Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
                 File.WriteAllText(savePath, json);
 
-                MelonLogger.Msg($"[SwornTweaks] [Save] Run state saved — biome={save.Expedition.BiomeIndex} room={save.Expedition.RoomIndex} players={save.Players.Count}");
+                MelonLogger.Msg($"[SwornTweaks] [Save] Run state saved — biome={save.Expedition.BiomeIndex} room={save.Expedition.RoomIndex} biomeRoom={save.Expedition.BiomeRoomIndex} paths={save.RoomHistory.Count}");
             }
             catch (Exception ex)
             {
@@ -305,41 +399,116 @@ namespace SwornTweaks.Patches
         }
     }
 
+    // ── Path recorder: capture GeneratePaths results ────────────
+    //
+    // Runs LAST among all GeneratePaths postfixes to capture the
+    // final path state after all other patches have modified it.
+    // Also updates the save file so room N+1's path data is persisted
+    // even though DoSave fires before GeneratePaths.
+
+    [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
+    [HarmonyPriority(Priority.Low - 20)]
+    static class SaveStatePathRecorder
+    {
+        static void Postfix(Il2CppReferenceArray<ExpeditionManager.Path> __result,
+                            int nextRoomIndex, BiomeData biome)
+        {
+            if (!Config.AutoSaveEnabled.Value) return;
+            if (SaveStateTracker.IsWarmingUp) return; // don't record warmup calls
+            if (__result == null || __result.Length == 0) return;
+
+            try
+            {
+                var bt = biome?.GetBiomeType().ToString() ?? "Unknown";
+                var snapshot = new RoomPathSnapshot
+                {
+                    NextRoomIndex = nextRoomIndex,
+                    BiomeType = bt,
+                };
+
+                for (int i = 0; i < __result.Length; i++)
+                {
+                    var path = __result[i];
+                    if (path == null) continue;
+
+                    var entry = new PathEntryData
+                    {
+                        RoomType = (int)path.roomType,
+                        LevelName = path.levelData?.name ?? "",
+                        RewardType = (int)path.rewardType,
+                    };
+
+                    if (path.postLevelEvents != null)
+                    {
+                        for (int j = 0; j < path.postLevelEvents.Length; j++)
+                            entry.PostLevelEvents.Add((int)path.postLevelEvents[j]);
+                    }
+
+                    snapshot.Paths.Add(entry);
+                }
+
+                SaveStateTracker.RoomHistory.Add(snapshot);
+                MelonLogger.Msg($"[SwornTweaks] [Save] Recorded path: nextRoom={nextRoomIndex} biome={bt} doors={snapshot.Paths.Count}");
+
+                // Update save file with latest path history (GeneratePaths fires
+                // AFTER DoSave in ConsumePath, so the save file may be stale)
+                try
+                {
+                    string savePath = SaveStateSave.GetSavePath();
+                    if (File.Exists(savePath))
+                    {
+                        string json = File.ReadAllText(savePath);
+                        var save = JsonSerializer.Deserialize<SaveData>(json);
+                        if (save != null)
+                        {
+                            save.RoomHistory = new List<RoomPathSnapshot>(SaveStateTracker.RoomHistory);
+                            string updated = JsonSerializer.Serialize(save, new JsonSerializerOptions { WriteIndented = true });
+                            File.WriteAllText(savePath, updated);
+                        }
+                    }
+                }
+                catch { } // non-critical — next DoSave will include it anyway
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SwornTweaks] [Save] Path recording failed: {ex.Message}");
+            }
+        }
+    }
+
     // ── Load trigger: on fresh run start ─────────────────────────
     //
-    // GeneratePaths fires DURING ResetBiomeRunData, but the body
-    // likely resets BiomeIndex to 0 before calling it. Strategy:
+    // New approach: instead of path trimming (which doesn't work
+    // because SWORN generates paths 1-2 at a time), we override
+    // nextRoomIndex in GeneratePaths to jump directly to the
+    // saved room. The init path (inside ResetBiomeRunData) is
+    // overridden to generate the target room's path, so the game
+    // loads the correct scene.
     //
-    //   Prefix  → read save, set biome-override + path-skip flags
-    //   Body    → builds m_biomeRunDatas, calls GeneratePaths
-    //             (SaveStateBiomeOverride prefix redirects to saved biome)
-    //             (SaveStatePathSkip postfix trims completed rooms)
-    //   Postfix → set BiomeIndex/RoomIndex/BiomeRoomIndex definitively
-    //             (survives whatever the body did to them)
+    // Before the override, we run "warmup" GeneratePaths calls for
+    // rooms 0..N-1 to advance other patches' internal state (e.g.
+    // BossRush encounter queues, FaeRealm portal counters).
 
     [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ResetBiomeRunData))]
     [HarmonyPriority(Priority.Low)]
     static class SaveStateLoad
     {
-        // Signaling for biome override (consumed by SaveStateBiomeOverride)
-        internal static bool ShouldOverrideBiome;
-        internal static int TargetBiomeIndex;
-
-        // Signaling for path trimming (consumed by SaveStatePathSkip)
-        internal static bool ShouldSkipRooms;
-        internal static int RoomsToSkip;
-
         // Pending save data for the Postfix to consume
-        private static SaveData _pendingSave;
+        private static SaveData? _pendingSave;
 
         static void Prefix(ExpeditionManager __instance)
         {
+            // Track init phase for all GeneratePaths calls
+            SaveStateTracker.IsInResetBiomeRunData = true;
+
             // Reset biome room counter on each biome start
             SaveStateTracker.ResetBiomeCounter();
+            SaveStateTracker.ResetHistory();
 
             try
             {
                 if (!Config.AutoSaveEnabled.Value || !Config.LoadSaveOnStart.Value) return;
+                if (Config.BossRushMode.Value) return; // save/load not supported in BossRush
 
                 // Only load on fresh run start (BiomeIndex == 0)
                 if (__instance.BiomeIndex != 0) return;
@@ -359,27 +528,24 @@ namespace SwornTweaks.Patches
                     return;
                 }
 
-                MelonLogger.Msg($"[SwornTweaks] [Save] Prefix: loading state from {save.Timestamp} — biome={save.Expedition.BiomeIndex} roomsInBiome={save.Expedition.BiomeRoomIndex}");
+                int target = save.Expedition.BiomeRoomIndex;
+                MelonLogger.Msg($"[SwornTweaks] [Save] Prefix: loading state from {save.Timestamp} — biome={save.Expedition.BiomeIndex} target room={target} saved paths={save.RoomHistory.Count}");
 
-                // Set biome override flag so SaveStateBiomeOverride redirects
-                // PathGenerator.GeneratePaths to the saved biome
-                if (save.Expedition.BiomeIndex > 0)
+                if (target <= 0)
                 {
-                    ShouldOverrideBiome = true;
-                    TargetBiomeIndex = save.Expedition.BiomeIndex;
-                    MelonLogger.Msg($"[SwornTweaks] [Save] Will override path generation to biome {save.Expedition.BiomeIndex}");
+                    MelonLogger.Msg("[SwornTweaks] [Save] Target room is 0 — no room skip needed");
+                    _pendingSave = save; // still restore player state
+                    return;
                 }
 
-                // Set skip flags BEFORE GeneratePaths fires (it runs inside ResetBiomeRunData)
-                int roomsToSkip = save.Expedition.BiomeRoomIndex;
-                if (roomsToSkip > 0)
-                {
-                    ShouldSkipRooms = true;
-                    RoomsToSkip = roomsToSkip;
-                    MelonLogger.Msg($"[SwornTweaks] [Save] Will skip {roomsToSkip} rooms on next path generation");
-                }
+                // Activate replay system
+                SaveStateTracker.ReplayActive = true;
+                SaveStateTracker.ReplayTargetRoom = target;
+                SaveStateTracker.ReplaySaveData = save;
+                SaveStateTracker.SavedRoomHistory = save.RoomHistory;
+                SaveStateTracker.BuildLevelLookup();
 
-                // Store for Postfix to handle state restore + player restore
+                // Store for Postfix to handle player restore
                 _pendingSave = save;
             }
             catch (Exception ex)
@@ -390,14 +556,20 @@ namespace SwornTweaks.Patches
 
         static void Postfix(ExpeditionManager __instance)
         {
+            SaveStateTracker.IsInResetBiomeRunData = false;
+
             if (_pendingSave == null) return;
             var save = _pendingSave;
             _pendingSave = null;
 
             try
             {
-                // Restore expedition state AFTER body ran
-                // (body likely reset BiomeIndex/RoomIndex/BiomeRoomIndex to 0)
+                // TODO: warmup — call GeneratePaths for rooms 0..target-1 to
+                // advance other patches' internal state (BossRush queues, etc.)
+                // Skipped for now because GeneratePaths has 8 params and we
+                // don't know them all. BossRush+save/load may have wrong encounters.
+
+                // Restore expedition state
                 var t = Traverse.Create(__instance);
                 t.Property("BiomeIndex").SetValue(save.Expedition.BiomeIndex);
                 t.Property("RoomIndex").SetValue(save.Expedition.RoomIndex);
@@ -491,7 +663,6 @@ namespace SwornTweaks.Patches
                 }
 
                 // Iterate session players and match to save data by id byte
-                // (avoids IL2CPP struct equality issues with ContainsKey)
                 foreach (var kvp in gm.players)
                 {
                     var playerId = kvp.Key;
@@ -682,82 +853,180 @@ namespace SwornTweaks.Patches
         }
     }
 
-    // ── Biome override: redirect path generation to saved biome ──
+    // ── GeneratePaths Prefix: override biome + nextRoomIndex ────
     //
-    // During ResetBiomeRunData the body resets BiomeIndex to 0 and then
-    // calls PathGenerator.GeneratePaths with biome-0 data. This prefix
-    // swaps the biome + biomeRunData params to the saved biome so the
-    // generated path matches where the player actually was.
+    // When replay is active, this redirects path generation to the
+    // saved room index and biome. Also sets expedition state on the
+    // ExpeditionManager right before path generation, so nothing
+    // can overwrite our values between here and the generator.
 
     [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
-    [HarmonyPriority(Priority.High)] // run before all other path patches
+    [HarmonyPriority(Priority.High)]
     static class SaveStateBiomeOverride
     {
         static void Prefix(ExpeditionManager expeditionManager,
                            ref BiomeData biome,
-                           ref PathGenerator.BiomeRunData biomeRunData)
+                           ref PathGenerator.BiomeRunData biomeRunData,
+                           ref int nextRoomIndex)
         {
-            if (!SaveStateLoad.ShouldOverrideBiome) return;
-
-            try
+            // Always log for diagnostics
+            if (Config.AutoSaveEnabled.Value && !SaveStateTracker.IsWarmingUp)
             {
-                int target = SaveStateLoad.TargetBiomeIndex;
+                string bt = "?";
+                try { bt = biome?.GetBiomeType().ToString() ?? "null"; } catch { }
+                MelonLogger.Msg($"[SwornTweaks] [Save] GeneratePaths: nextRoomIndex={nextRoomIndex} biome={bt} inInit={SaveStateTracker.IsInResetBiomeRunData} replay={SaveStateTracker.ReplayActive} warmup={SaveStateTracker.IsWarmingUp}");
+            }
+
+            if (!SaveStateTracker.ReplayActive) return;
+            if (SaveStateTracker.IsWarmingUp) return;
+
+            var save = SaveStateTracker.ReplaySaveData;
+            if (save == null) return;
+
+            int target = SaveStateTracker.ReplayTargetRoom;
+
+            // Override biome if saved biome differs from current
+            if (save.Expedition.BiomeIndex > 0)
+            {
                 var biomes = expeditionManager.biomes;
                 var runDatas = expeditionManager.m_biomeRunDatas;
+                int targetBiome = save.Expedition.BiomeIndex;
 
-                if (biomes != null && target < biomes.Count &&
-                    runDatas != null && target < runDatas.Length)
+                if (biomes != null && targetBiome < biomes.Count &&
+                    runDatas != null && targetBiome < runDatas.Length)
                 {
-                    biome = biomes[target];
-                    biomeRunData = runDatas[target];
-                    MelonLogger.Msg($"[SwornTweaks] [Save] Biome override: redirected path generation to biome {target}");
-                }
-                else
-                {
-                    MelonLogger.Warning($"[SwornTweaks] [Save] Biome override failed: target={target} biomes={biomes?.Count} runDatas={runDatas?.Length}");
+                    biome = biomes[targetBiome];
+                    biomeRunData = runDatas[targetBiome];
+                    MelonLogger.Msg($"[SwornTweaks] [Save] Replay: overrode biome to {targetBiome}");
                 }
             }
-            catch (Exception ex)
-            {
-                MelonLogger.Warning($"[SwornTweaks] [Save] Biome override error: {ex.Message}");
-            }
-            // Don't clear the flag here — SaveStatePathSkip clears it
-            // once the main biome path (long enough to trim) arrives.
+
+            // Override nextRoomIndex to the target room
+            int orig = nextRoomIndex;
+            nextRoomIndex = target;
+            MelonLogger.Msg($"[SwornTweaks] [Save] Replay: nextRoomIndex {orig} → {target}");
+
+            // Set expedition state RIGHT HERE — nothing can overwrite between
+            // this point and the path generator reading it
+            var t = Traverse.Create(expeditionManager);
+            t.Property("BiomeIndex").SetValue(save.Expedition.BiomeIndex);
+            t.Property("RoomIndex").SetValue(save.Expedition.RoomIndex);
+            t.Property("BiomeRoomIndex").SetValue(target);
+            t.Property("HasKilledArthurThisRun").SetValue(save.Expedition.HasKilledArthur);
+            t.Property("HasKilledMorganaThisRun").SetValue(save.Expedition.HasKilledMorgana);
         }
     }
 
-    // ── Path trimming: skip completed rooms on load ────────────
+    // ── GeneratePaths Postfix: replay saved path data ───────────
+    //
+    // When replay is active, replaces the generated path entries'
+    // fields with saved data from the original run. This ensures
+    // the player gets the same room layout.
+    //
+    // For the init call (inside ResetBiomeRunData), ensures the
+    // result has exactly 1 element (the game expects this for init).
+    //
+    // Consumes the replay after the first non-init call.
 
     [HarmonyPatch(typeof(PathGenerator), nameof(PathGenerator.GeneratePaths))]
-    [HarmonyPriority(Priority.Low - 10)] // run after all other path patches
-    static class SaveStatePathSkip
+    [HarmonyPriority(Priority.Low - 10)]
+    static class SaveStatePathReplay
     {
-        static void Postfix(ref Il2CppReferenceArray<ExpeditionManager.Path> __result)
+        static void Postfix(ref Il2CppReferenceArray<ExpeditionManager.Path> __result,
+                            int nextRoomIndex)
         {
-            if (!SaveStateLoad.ShouldSkipRooms) return;
+            if (!SaveStateTracker.ReplayActive) return;
+            if (SaveStateTracker.IsWarmingUp) return;
+            if (__result == null || __result.Length == 0) return;
 
-            int skip = SaveStateLoad.RoomsToSkip;
-            var paths = __result;
-
-            // If path is too short, this isn't the main biome path (e.g. a 1-entry
-            // init path inside ResetBiomeRunData). Keep the flag for the real call.
-            if (paths == null || skip >= paths.Length)
+            var history = SaveStateTracker.SavedRoomHistory;
+            if (history == null || history.Count == 0)
             {
-                MelonLogger.Msg($"[SwornTweaks] [Save] Path too short ({paths?.Length ?? 0}) to skip {skip} — waiting for biome path");
-                return; // do NOT clear flags
+                MelonLogger.Msg("[SwornTweaks] [Save] Replay: no saved path history — using generated paths");
+                ConsumeReplayIfGameplay();
+                return;
             }
 
-            // This is the real biome path — consume all flags and trim
-            SaveStateLoad.ShouldSkipRooms = false;
-            SaveStateLoad.ShouldOverrideBiome = false;
+            // Find saved snapshot matching this nextRoomIndex
+            RoomPathSnapshot? snapshot = null;
+            foreach (var s in history)
+            {
+                if (s.NextRoomIndex == nextRoomIndex)
+                {
+                    snapshot = s;
+                    break;
+                }
+            }
 
-            int newLen = paths.Length - skip;
-            var trimmed = new Il2CppReferenceArray<ExpeditionManager.Path>(newLen);
-            for (int i = 0; i < newLen; i++)
-                trimmed[i] = paths[i + skip];
-            __result = trimmed;
+            if (snapshot == null)
+            {
+                MelonLogger.Msg($"[SwornTweaks] [Save] Replay: no saved data for room {nextRoomIndex} — using generated paths");
+                ConsumeReplayIfGameplay();
+                return;
+            }
 
-            MelonLogger.Msg($"[SwornTweaks] [Save] Skipped {skip} rooms — path: {paths.Length} → {newLen}");
+            // Overwrite generated path entries with saved data
+            var lookup = SaveStateTracker.LevelLookup;
+            int overwritten = 0;
+
+            // Match generated paths 1:1 with saved paths (use min of both counts)
+            int count = Math.Min(__result.Length, snapshot.Paths.Count);
+            for (int i = 0; i < count; i++)
+            {
+                var path = __result[i];
+                var saved = snapshot.Paths[i];
+                if (path == null) continue;
+
+                path.roomType = (RoomType)saved.RoomType;
+                path.rewardType = (RewardType)saved.RewardType;
+
+                // Restore LevelData by name lookup
+                if (lookup != null && !string.IsNullOrEmpty(saved.LevelName) &&
+                    lookup.TryGetValue(saved.LevelName, out var ld))
+                {
+                    path.levelData = ld;
+                }
+
+                // Restore post-level events
+                if (saved.PostLevelEvents.Count > 0)
+                {
+                    var events = new Il2CppStructArray<PostLevelEventType>(saved.PostLevelEvents.Count);
+                    for (int j = 0; j < saved.PostLevelEvents.Count; j++)
+                        events[j] = (PostLevelEventType)saved.PostLevelEvents[j];
+                    path.postLevelEvents = events;
+                }
+                else
+                {
+                    path.postLevelEvents = new Il2CppStructArray<PostLevelEventType>(0);
+                }
+
+                overwritten++;
+            }
+
+            // If init call and result has more than 1 element, trim to 1
+            // (the game expects exactly 1 path for the initial room setup)
+            if (SaveStateTracker.IsInResetBiomeRunData && __result.Length > 1)
+            {
+                var trimmed = new Il2CppReferenceArray<ExpeditionManager.Path>(1);
+                trimmed[0] = __result[0];
+                __result = trimmed;
+                MelonLogger.Msg($"[SwornTweaks] [Save] Replay: trimmed init result to 1 element");
+            }
+
+            MelonLogger.Msg($"[SwornTweaks] [Save] Replay: overwrote {overwritten}/{__result.Length} paths for room {nextRoomIndex} with saved data");
+
+            ConsumeReplayIfGameplay();
+        }
+
+        private static void ConsumeReplayIfGameplay()
+        {
+            // Only consume replay after the first non-init call
+            // (the init call inside ResetBiomeRunData should NOT consume)
+            if (!SaveStateTracker.IsInResetBiomeRunData)
+            {
+                SaveStateTracker.ClearReplay();
+                MelonLogger.Msg("[SwornTweaks] [Save] Replay consumed (first gameplay GeneratePaths call)");
+            }
         }
     }
 
