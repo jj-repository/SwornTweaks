@@ -88,10 +88,13 @@ jobs:
           name: SwornTweaks-Linux
           path: release/
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/SwornTweaks.exe
-            release/SwornTweaks-Linux
-            SwornTweaks.dll
+      - name: Create Release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            release/SwornTweaks.exe \
+            release/SwornTweaks-Linux \
+            SwornTweaks.dll \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
