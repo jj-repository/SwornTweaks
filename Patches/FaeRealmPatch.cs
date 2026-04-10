@@ -68,7 +68,7 @@ namespace SwornTweaks.Patches
                 var em = UnityEngine.Object.FindObjectOfType<ExpeditionManager>();
                 if (em != null) biomeIndex = em.BiomeIndex;
             }
-            catch { }
+            catch { } // FindObjectOfType not available outside of gameplay scenes
 
             PostLevelEventType toInject = PostLevelEventType.None;
 

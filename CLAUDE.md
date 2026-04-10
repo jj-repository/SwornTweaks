@@ -1,6 +1,10 @@
 # SwornTweaks
 
 All-in-one MelonLoader mod for SWORN (Windwalk/Team17) with PyQt6 configurator. Consolidates rerolls, rarity, gem cost, door rewards, duo boost, biome repeat, beast rooms, HP multipliers, boss rush, and multiplayer save/resume into a single DLL. Stack: C#/.NET 6, 0Harmony, Python/PyQt6.
-v1.11
+v1.12
 
 Read `.claude/index.md` for project details.
+
+## Paths
+- MelonLoader log: `C:\Program Files (x86)\Steam\steamapps\common\SWORN\MelonLoader\Latest.log`
+- Save file: `C:\Program Files (x86)\Steam\steamapps\common\SWORN\UserData\SwornTweaks_SaveState.json`

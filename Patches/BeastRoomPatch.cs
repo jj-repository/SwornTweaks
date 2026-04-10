@@ -43,7 +43,6 @@ namespace SwornTweaks.Patches
 
             var bt = biome != null ? biome.GetBiomeType() : BiomeType.None;
 
-
             if (Config.UseVanillaBeastSettings.Value) return;
             if (Config.BossRushMode.Value) return; // BossRush handles all room assignment
             if (bt == BiomeType.Camelot || bt == BiomeType.Somewhere || bt == BiomeType.None)

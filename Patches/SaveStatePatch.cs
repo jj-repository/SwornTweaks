@@ -149,6 +149,9 @@ namespace SwornTweaks.Patches
         // LevelData lookup (built once on first replay)
         internal static Dictionary<string, LevelData>? LevelLookup;
 
+        // Pre-transition health snapshot (captured before ConsumePath body heals)
+        internal static Dictionary<byte, HealthData> PreTransitionHealth = new();
+
         internal static void ResetBiomeCounter()
         {
             BiomeRoomsCompleted = 0;
@@ -205,6 +208,100 @@ namespace SwornTweaks.Patches
         }
     }
 
+    // ── Pre-transition health snapshot ──────────────────────────
+    //
+    // ConsumePath body heals players (between-room heal). We need
+    // health from BEFORE the heal. This Prefix captures it.
+
+    [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ConsumePath))]
+    [HarmonyPriority(Priority.High)]
+    static class SaveStateHealthSnapshot
+    {
+        static void Prefix()
+        {
+            if (!Config.AutoSaveEnabled.Value) return;
+
+            SaveStateTracker.PreTransitionHealth.Clear();
+            try
+            {
+                var gm = UnityEngine.Object.FindObjectOfType<BorealisGamemode>();
+                if (gm?.players == null) return;
+
+                var allHealth = UnityEngine.Object.FindObjectsOfType<CharacterHealth>();
+                if (allHealth == null) return;
+
+                // Build non-mob health list
+                var playerHealthComps = new List<CharacterHealth>();
+                foreach (var h in allHealth)
+                {
+                    if (h == null) continue;
+                    try { if (h.gameObject.GetComponent<Mob>() != null) continue; } catch { continue; }
+                    playerHealthComps.Add(h);
+                }
+
+                int idx = 0;
+                foreach (var kvp in gm.players)
+                {
+                    var playerId = kvp.Key;
+                    var borealisPlayer = kvp.Value;
+
+                    // Try PersistentRunData first
+                    bool captured = false;
+                    try
+                    {
+                        if (borealisPlayer?.PersistentRunData != null)
+                        {
+                            var chType = Il2CppType.Of<CharacterHealth>();
+                            if (chType != null && borealisPlayer.PersistentRunData.ContainsKey(chType))
+                            {
+                                var prd = borealisPlayer.PersistentRunData[chType];
+                                var healthPrd = prd?.Cast<CharacterHealth.HealthPersistentRunData>();
+                                if (healthPrd != null && healthPrd.max > 0)
+                                {
+                                    SaveStateTracker.PreTransitionHealth[playerId.id] = new HealthData
+                                    {
+                                        Current = healthPrd.current,
+                                        Max = healthPrd.max,
+                                        Curse = healthPrd.curse,
+                                        ReviveTokens = healthPrd.reviveTokens,
+                                    };
+                                    captured = true;
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    // Fallback: live CharacterHealth
+                    if (!captured && idx < playerHealthComps.Count)
+                    {
+                        try
+                        {
+                            var ch = playerHealthComps[idx];
+                            var t = Traverse.Create(ch);
+                            float cur = t.Property("Current").GetValue<float>();
+                            float max = t.Property("Max").GetValue<float>();
+                            int revives = t.Property("CurrentReviveTokens").GetValue<int>();
+                            if (max > 0)
+                            {
+                                SaveStateTracker.PreTransitionHealth[playerId.id] = new HealthData
+                                {
+                                    Current = cur,
+                                    Max = max,
+                                    ReviveTokens = revives,
+                                };
+                                captured = true;
+                            }
+                        }
+                        catch { }
+                    }
+                    idx++;
+                }
+            }
+            catch { }
+        }
+    }
+
     // ── Save trigger: after each room transition ─────────────────
 
     [HarmonyPatch(typeof(ExpeditionManager), nameof(ExpeditionManager.ConsumePath))]
@@ -234,23 +331,6 @@ namespace SwornTweaks.Patches
                 var bm = UnityEngine.Object.FindObjectOfType<BlessingManager>();
                 var cm = UnityEngine.Object.FindObjectOfType<CurrencyManager>();
 
-                // Pre-collect player CharacterHealth components (non-mob) for fallback health reading
-                var playerHealthComps = new List<CharacterHealth>();
-                try
-                {
-                    var allHealth = UnityEngine.Object.FindObjectsOfType<CharacterHealth>();
-                    if (allHealth != null)
-                    {
-                        foreach (var h in allHealth)
-                        {
-                            if (h == null) continue;
-                            try { if (h.gameObject.GetComponent<Mob>() != null) continue; } catch { continue; }
-                            playerHealthComps.Add(h);
-                        }
-                    }
-                }
-                catch { }
-
                 var save = new SaveData
                 {
                     Timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
@@ -266,7 +346,6 @@ namespace SwornTweaks.Patches
                     RoomHistory = new List<RoomPathSnapshot>(SaveStateTracker.RoomHistory),
                 };
 
-                int playerIndex = 0;
                 foreach (var kvp in gm.players)
                 {
                     var playerId = kvp.Key;
@@ -279,69 +358,15 @@ namespace SwornTweaks.Patches
                         catch { playerSave.Gold = 0; }
                     }
 
-                    // Health — try PersistentRunData first, then live CharacterHealth
-                    try
+                    // Health — use pre-transition snapshot (captured before between-room heal)
+                    if (SaveStateTracker.PreTransitionHealth.TryGetValue(playerId.id, out var snapshotHealth))
                     {
-                        bool healthCaptured = false;
-
-                        // Approach 1: PersistentRunData (has curse + reviveTokens)
-                        var borealisPlayer = kvp.Value;
-                        if (borealisPlayer?.PersistentRunData != null)
-                        {
-                            var chType = Il2CppType.Of<CharacterHealth>();
-                            if (chType != null)
-                            {
-                                bool hasKey = borealisPlayer.PersistentRunData.ContainsKey(chType);
-                                if (hasKey)
-                                {
-                                    var prd = borealisPlayer.PersistentRunData[chType];
-                                    var healthPrd = prd?.Cast<CharacterHealth.HealthPersistentRunData>();
-                                    if (healthPrd != null && healthPrd.max > 0)
-                                    {
-                                        playerSave.Health = new HealthData
-                                        {
-                                            Current = healthPrd.current,
-                                            Max = healthPrd.max,
-                                            Curse = healthPrd.curse,
-                                            ReviveTokens = healthPrd.reviveTokens,
-                                        };
-                                        healthCaptured = true;
-                                        MelonLogger.Msg($"[SwornTweaks] [Save] Health (PRD) P{playerId.id}: {healthPrd.current:F0}/{healthPrd.max:F0} curse={healthPrd.curse:F0} revives={healthPrd.reviveTokens}");
-                                    }
-                                }
-                                if (!healthCaptured)
-                                    MelonLogger.Msg($"[SwornTweaks] [Save] PRD health unavailable for P{playerId.id} (hasKey={hasKey})");
-                            }
-                        }
-
-                        // Approach 2: Live EntityHealth properties (Current/Max are on EntityHealth base class)
-                        if (!healthCaptured && playerIndex < playerHealthComps.Count)
-                        {
-                            var ch = playerHealthComps[playerIndex];
-                            var t = Traverse.Create(ch);
-                            float currentHp = t.Property("Current").GetValue<float>();
-                            float maxHp = t.Property("Max").GetValue<float>();
-                            int revives = t.Property("CurrentReviveTokens").GetValue<int>();
-
-                            if (maxHp > 0)
-                            {
-                                playerSave.Health = new HealthData
-                                {
-                                    Current = currentHp,
-                                    Max = maxHp,
-                                    ReviveTokens = revives,
-                                };
-                                healthCaptured = true;
-                                MelonLogger.Msg($"[SwornTweaks] [Save] Health (live) P{playerId.id}: {currentHp:F0}/{maxHp:F0} revives={revives}");
-                            }
-                        }
-
-                        if (!healthCaptured)
-                            MelonLogger.Warning($"[SwornTweaks] [Save] Could not read health for P{playerId.id}");
+                        playerSave.Health = snapshotHealth;
+                        MelonLogger.Msg($"[SwornTweaks] [Save] Health (pre-heal) P{playerId.id}: {snapshotHealth.Current:F0}/{snapshotHealth.Max:F0} curse={snapshotHealth.Curse:F0} revives={snapshotHealth.ReviveTokens}");
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        MelonLogger.Warning($"[SwornTweaks] [Save] Health read failed for P{playerId.id}: {ex.Message}");
+                        MelonLogger.Warning($"[SwornTweaks] [Save] No pre-transition health snapshot for P{playerId.id}");
                     }
 
                     // Blessings — convert IL2CPP IEnumerable to List for safe iteration
@@ -377,7 +402,6 @@ namespace SwornTweaks.Patches
                     }
 
                     save.Players.Add(playerSave);
-                    playerIndex++;
                 }
 
                 string json = JsonSerializer.Serialize(save, new JsonSerializerOptions { WriteIndented = true });
@@ -879,6 +903,16 @@ namespace SwornTweaks.Patches
 
             if (!SaveStateTracker.ReplayActive) return;
             if (SaveStateTracker.IsWarmingUp) return;
+
+            // Only override during init call (inside ResetBiomeRunData).
+            // Gameplay calls after the player enters the target room should
+            // pass through with the game's own nextRoomIndex.
+            if (!SaveStateTracker.IsInResetBiomeRunData)
+            {
+                MelonLogger.Msg($"[SwornTweaks] [Save] Replay: gameplay call nextRoomIndex={nextRoomIndex} — passing through, consuming replay");
+                SaveStateTracker.ClearReplay();
+                return;
+            }
 
             var save = SaveStateTracker.ReplaySaveData;
             if (save == null) return;

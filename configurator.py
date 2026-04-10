@@ -44,7 +44,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.11"
+VERSION = "1.12"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -206,8 +206,6 @@ VANILLA_DEFAULTS = {
     "BossRushHealPerRoom": 15,
     "BossRushScaling": 1.25,
     "BossRushRandomizer": False,
-    "BossRushRandomizeArthur": False,
-    "BossRushRandomizeRoundTable": False,
     "BossRushExtraBlessings": 0,
     "ExtraBlessings": 0,
     "FightBossMode": False,
@@ -1219,8 +1217,48 @@ def _compute_git_blob_sha(content: bytes) -> str:
     return hashlib.sha1(header + content).hexdigest()
 
 
-def _verify_file_against_github(ref: str, filename: str, content: bytes) -> None:
-    """Verify content matches GitHub's git tree SHA for the given ref."""
+_sha256sums_cache: dict[str, str] = {}
+
+
+def _get_expected_sha256(
+    release_data: dict, asset_name: str, headers: dict | None = None
+) -> str | None:
+    """Fetch SHA256SUMS from release and return expected hash for asset_name."""
+    import re
+
+    tag_name = release_data.get("tag_name", "")
+    if tag_name not in _sha256sums_cache:
+        sha_url = (
+            f"https://github.com/{GITHUB_REPO}/releases/download/{tag_name}/SHA256SUMS"
+        )
+        try:
+            req = urllib.request.Request(sha_url, headers=headers or {})
+            with urllib.request.urlopen(req, timeout=30, context=_ssl_ctx) as response:
+                _sha256sums_cache[tag_name] = response.read().decode("utf-8")
+        except Exception:
+            return None
+    sha256sums = _sha256sums_cache.get(tag_name, "")
+    for line in sha256sums.strip().splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == asset_name:
+            h = parts[0].lower()
+            if re.fullmatch(r"[0-9a-f]{64}", h):
+                return h
+            return None
+    return None
+
+
+def _verify_file_against_github(
+    ref: str,
+    filename: str,
+    content: bytes,
+    release_data: dict | None = None,
+    asset_name: str = "",
+) -> None:
+    """Verify content via SHA-1 git blob hash and (if available) SHA-256."""
+    import hashlib
+
+    # SHA-1: git blob integrity check against GitHub contents API
     api_url = (
         f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}?ref={ref}"
     )
@@ -1232,9 +1270,23 @@ def _verify_file_against_github(ref: str, filename: str, content: bytes) -> None
     if actual_sha != expected_sha:
         raise RuntimeError(
             f"Integrity check failed for {filename}!\n"
-            f"Expected SHA: {expected_sha[:16]}...\n"
-            f"Got SHA: {actual_sha[:16]}..."
+            f"Expected SHA-1: {expected_sha[:16]}...\n"
+            f"Got SHA-1: {actual_sha[:16]}..."
         )
+
+    # SHA-256: verify against SHA256SUMS from the release (if provided)
+    if release_data and asset_name:
+        expected_256 = _get_expected_sha256(
+            release_data, asset_name, headers={"User-Agent": "SwornTweaks"}
+        )
+        if expected_256:
+            actual_256 = hashlib.sha256(content).hexdigest()
+            if actual_256 != expected_256:
+                raise RuntimeError(
+                    f"SHA-256 integrity check failed for {asset_name}!\n"
+                    f"Expected: {expected_256[:16]}...\n"
+                    f"Got: {actual_256[:16]}..."
+                )
 
 
 class DownloadWorker(QThread):
@@ -1244,13 +1296,21 @@ class DownloadWorker(QThread):
     download_error = pyqtSignal(str)
 
     def __init__(
-        self, url: str, dest: Path, verify_ref: str = "", verify_filename: str = ""
+        self,
+        url: str,
+        dest: Path,
+        verify_ref: str = "",
+        verify_filename: str = "",
+        release_data: dict | None = None,
+        asset_name: str = "",
     ):
         super().__init__()
         self.url = url
         self.dest = dest
         self.verify_ref = verify_ref
         self.verify_filename = verify_filename
+        self.release_data = release_data
+        self.asset_name = asset_name
 
     def run(self):
         try:
@@ -1264,7 +1324,30 @@ class DownloadWorker(QThread):
                 if len(data) > _MAX_DOWNLOAD_BYTES:
                     raise RuntimeError("Download exceeds 50 MB safety limit")
             if self.verify_ref and self.verify_filename:
-                _verify_file_against_github(self.verify_ref, self.verify_filename, data)
+                _verify_file_against_github(
+                    self.verify_ref,
+                    self.verify_filename,
+                    data,
+                    release_data=self.release_data,
+                    asset_name=self.asset_name,
+                )
+            elif self.release_data and self.asset_name:
+                # Release asset (exe): SHA-256-only verification
+                import hashlib
+
+                expected = _get_expected_sha256(
+                    self.release_data,
+                    self.asset_name,
+                    headers={"User-Agent": "SwornTweaks"},
+                )
+                if expected:
+                    actual = hashlib.sha256(data).hexdigest()
+                    if actual != expected:
+                        raise RuntimeError(
+                            f"SHA-256 integrity check failed for {self.asset_name}!\n"
+                            f"Expected: {expected[:16]}...\n"
+                            f"Got: {actual[:16]}..."
+                        )
             tmp.write_bytes(data)
             # On Windows, you can't overwrite a running exe, but you CAN
             # rename it. Move the old file aside, put the new one in place.
@@ -1648,8 +1731,7 @@ class Configurator(QMainWindow):
         run_rows.append(self._bool_row("AllBiomesRandom", "All Biomes Random Order"))
         run_rows.append(
             self._label_row(
-                "Randomizes all 3 combat biome slots\n"
-                "plus extras. Camelot/Somewhere stay last."
+                "Randomizes all 3 combat biome slots\nplus extras. Camelot/Somewhere stay last."
             )
         )
         run_rows.append(self._bool_row("ProgressiveScaling", "Progressive HP Scaling"))
@@ -1696,18 +1778,6 @@ class Configurator(QMainWindow):
         rd_lay.addLayout(
             self._bool_row("BossRushRandomizer", "Randomize all boss/beast order")
         )
-        # Sub-toggles for randomizer — only visible when randomizer is checked
-        self._rush_rand_details = QWidget()
-        rrd_lay = QVBoxLayout(self._rush_rand_details)
-        rrd_lay.setContentsMargins(20, 0, 0, 0)
-        rrd_lay.addLayout(
-            self._bool_row("BossRushRandomizeArthur", "Randomize Arthur Spawn")
-        )
-        rrd_lay.addLayout(
-            self._bool_row("BossRushRandomizeRoundTable", "Randomize RoundTable Spawn")
-        )
-        self._rush_rand_details.setVisible(False)
-        rd_lay.addWidget(self._rush_rand_details)
         rd_lay.addLayout(
             self._int_row("BossRushHornRewards", "Extra Horns per Room", 0, 3)
         )
@@ -1732,11 +1802,6 @@ class Configurator(QMainWindow):
 
         self.widgets["BossRushMode"].stateChanged.connect(
             lambda _: self._update_rush_enables()
-        )
-        self.widgets["BossRushRandomizer"].stateChanged.connect(
-            lambda _: self._rush_rand_details.setVisible(
-                self.widgets["BossRushRandomizer"].isChecked()
-            )
         )
 
         # ── Assemble tabs ───────────────────────────────────────────
@@ -2079,8 +2144,7 @@ class Configurator(QMainWindow):
         QMessageBox.information(
             None,
             "SWORN Not Found",
-            "Could not auto-detect your SWORN installation.\n"
-            "Please select the SWORN game folder.",
+            "Could not auto-detect your SWORN installation.\nPlease select the SWORN game folder.",
         )
         d = QFileDialog.getExistingDirectory(None, "Select SWORN Game Folder")
         return Path(d) if d else None
@@ -2732,6 +2796,18 @@ class Configurator(QMainWindow):
             except (ValueError, TypeError):
                 update_configurator = True  # can't compare, update to be safe
 
+        # Fetch latest release data for SHA-256 verification
+        release_data = None
+        try:
+            api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            req = urllib.request.Request(api_url, headers={"User-Agent": "SwornTweaks"})
+            with urllib.request.urlopen(req, timeout=10, context=_ssl_ctx) as resp:
+                release_data = json.loads(resp.read().decode())
+        except Exception as e:
+            print(
+                f"[update] Could not fetch release data for SHA-256 verification: {e}"
+            )
+
         self._update_results = {"dll": None}
 
         if update_configurator:
@@ -2746,6 +2822,8 @@ class Configurator(QMainWindow):
             self.mods_path / "SwornTweaks.dll",
             verify_ref="main",
             verify_filename="SwornTweaks.dll",
+            release_data=release_data,
+            asset_name="SwornTweaks.dll",
         )
         dll_worker.download_finished.connect(lambda p: self._on_download_done("dll", p))
         dll_worker.download_error.connect(
@@ -2758,7 +2836,12 @@ class Configurator(QMainWindow):
             if IS_FROZEN:
                 # Running as compiled .exe — download new exe from GitHub releases.
                 exe_path = Path(sys.executable).resolve()
-                exe_worker = DownloadWorker(GITHUB_EXE, exe_path)
+                exe_worker = DownloadWorker(
+                    GITHUB_EXE,
+                    exe_path,
+                    release_data=release_data,
+                    asset_name=_EXE_ASSET,
+                )
                 exe_worker.download_finished.connect(
                     lambda p: self._on_download_done("exe", p)
                 )
@@ -2775,6 +2858,8 @@ class Configurator(QMainWindow):
                     script_path,
                     verify_ref="main",
                     verify_filename="configurator.py",
+                    release_data=release_data,
+                    asset_name="configurator.py",
                 )
                 cfg_worker.download_finished.connect(
                     lambda p: self._on_download_done("cfg", p)

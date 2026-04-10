@@ -88,12 +88,19 @@ jobs:
           name: SwornTweaks-Linux
           path: release/
 
+      - name: Generate SHA256SUMS
+        run: |
+          sha256sum release/SwornTweaks.exe release/SwornTweaks-Linux SwornTweaks.dll configurator.py > SHA256SUMS
+          # Strip directory prefixes so asset names match what the updater expects
+          sed -i 's|release/||g' SHA256SUMS
+
       - name: Create Release
         run: |
           gh release create "${{ github.ref_name }}" \
             release/SwornTweaks.exe \
             release/SwornTweaks-Linux \
             SwornTweaks.dll \
+            SHA256SUMS \
             --title "${{ github.ref_name }}" \
             --generate-notes
         env:

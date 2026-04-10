@@ -706,7 +706,7 @@ namespace SwornTweaks.Patches
 
                     return false;
                 }
-                catch { }
+                catch { } // IL2CPP intercept safety net
 
                 return true;
             }
@@ -744,7 +744,7 @@ namespace SwornTweaks.Patches
 
                     return false;
                 }
-                catch { }
+                catch { } // IL2CPP intercept safety net
 
                 return true;
             }
