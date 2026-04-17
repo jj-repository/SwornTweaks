@@ -93,6 +93,9 @@ namespace SwornTweaks
         internal static MelonPreferences_Entry<bool> BossRushRandomizer = null!;
         internal static MelonPreferences_Entry<int> BossRushExtraBlessings = null!;
 
+        // Health Logging
+        internal static MelonPreferences_Entry<bool> HealthLogging = null!;
+
         // Fight a Specific Boss
         internal static MelonPreferences_Entry<bool> FightBossMode = null!;
         internal static MelonPreferences_Entry<string> FightBossSelection = null!;
@@ -218,6 +221,9 @@ namespace SwornTweaks
                 "Randomize all boss/beast order across biomes (Roundtable skipped, Morgana always last)");
             BossRushExtraBlessings = _cat.CreateEntry("BossRushExtraBlessings", 0,
                 "Extra blessing rewards per boss rush room (0-3)");
+
+            HealthLogging = _cat.CreateEntry("HealthLogging", false,
+                "Log boss/beast HP to SwornTweaks_HPLog.csv in UserData (for data collection)");
 
             FightBossMode = _cat.CreateEntry("FightBossMode", false,
                 "Enable specific boss fight mode (force-load a chosen boss)");

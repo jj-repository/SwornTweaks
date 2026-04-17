@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using HarmonyLib;
 using Il2Cpp;
 using MelonLoader;
+using MelonLoader.Utils;
 using UnityEngine;
 
 namespace SwornTweaks.Patches
@@ -19,6 +21,10 @@ namespace SwornTweaks.Patches
         internal static DifficultyManager? _cachedDM;
         internal static BorealisGamemode? _cachedGM;
         internal static bool _headerLogged;
+
+        // HP log file path
+        private static readonly string HPLogPath = Path.Combine(
+            MelonEnvironment.UserDataDirectory, "SwornTweaks_HPLog.csv");
 
         // Progressive HP scaling data
         private static readonly Dictionary<BiomeType, float> NativePower = new()
@@ -46,6 +52,33 @@ namespace SwornTweaks.Patches
             { "ArthurDragon", 22000f },
             { "Morgana",      20000f },
         };
+
+        internal static void InitHPLog()
+        {
+            if (!Config.HealthLogging.Value) return;
+            try
+            {
+                File.WriteAllText(HPLogPath,
+                    "Type,Name,Biome,Difficulty,BaseMax,GameMax,AfterMod,ProgMult,RushMult,HPMult,DmgMult\n");
+                MelonLogger.Msg($"[SwornTweaks] [HP] CSV log started: {HPLogPath}");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SwornTweaks] [HP] Failed to init CSV: {ex.Message}");
+            }
+        }
+
+        private static void LogHP(string type, string name, string biome, string diff,
+            float baseMax, float gameMax, float afterMod, float prog, float rush, float hpMult, float dmgMult)
+        {
+            if (!Config.HealthLogging.Value) return;
+            try
+            {
+                File.AppendAllText(HPLogPath,
+                    $"{type},{name},{biome},{diff},{baseMax:F0},{gameMax:F0},{afterMod:F0},{prog:F2},{rush:F2},{hpMult},{dmgMult}\n");
+            }
+            catch { }
+        }
 
         private static float GetBossRushScaling()
         {
@@ -166,6 +199,10 @@ namespace SwornTweaks.Patches
             if (rushMult != 1.0f && health != null)
                 health.AddMod(rushMult);
 
+            string diff = "";
+            if (Config.HealthLogging.Value)
+                diff = GetSessionInfo();
+
             if (isBoss)
             {
                 if (Config.BossHealthMultiplier.Value != 1.0f && health != null)
@@ -177,6 +214,8 @@ namespace SwornTweaks.Patches
                     MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | GameMax={max:F0} | RushBase={rushBaseHP:F0} | AfterMod={maxAfter:F0} | rush={rushMult:F2}x | hpMult={Config.BossHealthMultiplier.Value}x | dmgMult={Config.BossDamageMultiplier.Value}x");
                 else
                     MelonLogger.Msg($"[SwornTweaks] [HP] BOSS {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | prog={progMult:F2}x | rush={rushMult:F2}x | hpMult={Config.BossHealthMultiplier.Value}x | dmgMult={Config.BossDamageMultiplier.Value}x");
+                LogHP("BOSS", mobType, biome, diff, baseMax, max, maxAfter, progMult, rushMult,
+                    Config.BossHealthMultiplier.Value, Config.BossDamageMultiplier.Value);
             }
             else if (isBeast)
             {
@@ -189,6 +228,8 @@ namespace SwornTweaks.Patches
                     MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | GameMax={max:F0} | RushBase={rushBaseHP:F0} | AfterMod={maxAfter:F0} | rush={rushMult:F2}x | hpMult={Config.BeastHealthMultiplier.Value}x | dmgMult={Config.BeastDamageMultiplier.Value}x");
                 else
                     MelonLogger.Msg($"[SwornTweaks] [HP] BEAST {mobType} | biome={biome} | BaseMax={baseMax:F0} | Max={max:F0} | AfterMod={maxAfter:F0} | prog={progMult:F2}x | rush={rushMult:F2}x | hpMult={Config.BeastHealthMultiplier.Value}x | dmgMult={Config.BeastDamageMultiplier.Value}x");
+                LogHP("BEAST", mobType, biome, diff, baseMax, max, maxAfter, progMult, rushMult,
+                    Config.BeastHealthMultiplier.Value, Config.BeastDamageMultiplier.Value);
             }
             else
             {
@@ -214,6 +255,7 @@ namespace SwornTweaks.Patches
             HealthBoostPatch._cachedEM = null;
             HealthBoostPatch._cachedDM = null;
             HealthBoostPatch._cachedGM = null;
+            HealthBoostPatch.InitHPLog();
         }
     }
 }

@@ -213,6 +213,7 @@ VANILLA_DEFAULTS = {
     "FightBossRepeat": 1,
     "FightBossDamageMultiplier": 1.0,
     "FightBossHealth": 0,
+    "HealthLogging": False,
     "AutoSaveEnabled": False,
     "LoadSaveOnStart": False,
 }
@@ -1515,6 +1516,18 @@ class Configurator(QMainWindow):
             "Save and resume multiplayer runs between sessions.",
         )
 
+        self._health_log_group = self._group(
+            "Health Logging",
+            [
+                self._bool_row("HealthLogging", "Log Boss/Beast HP to CSV"),
+                self._label_row(
+                    "Writes boss and beast HP data to UserData/SwornTweaks_HPLog.csv.\n"
+                    "CSV resets each run. Disable after collecting data."
+                ),
+            ],
+            "Export boss/beast HP values to a CSV file for data collection.",
+        )
+
         sword_row = QHBoxLayout()
         self._sword_cb = QCheckBox("Guaranteed Swords")
         self._sword_cb.stateChanged.connect(self._update_sword_enables)
@@ -1838,6 +1851,7 @@ class Configurator(QMainWindow):
         tlay.addWidget(self._skip_group)
         tlay.addWidget(self._fae_group)
         tlay.addWidget(self._save_state_group)
+        tlay.addWidget(self._health_log_group)
         tlay.addWidget(self._sword_group)
         tlay.addStretch()
         self._tabs.addTab(_scroll_tab(toggles_page), "Toggles")
@@ -1917,7 +1931,9 @@ class Configurator(QMainWindow):
         slay.addWidget(open_cfg_btn)
         slay.addSpacing(12)
         self._auto_update_cb = QCheckBox("Check for updates on startup")
-        self._auto_update_cb.setChecked(_load_settings().get("auto_update_check", True))
+        self._auto_update_cb.setChecked(
+            _load_settings().get("auto_update_check", False)
+        )
         self._auto_update_cb.stateChanged.connect(self._on_auto_update_toggled)
         slay.addWidget(self._auto_update_cb)
         self._dark_mode_cb = QCheckBox("Dark Mode")
