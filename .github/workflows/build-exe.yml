@@ -7,24 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify-version:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v6
-      - name: Verify VERSION matches tag
-        run: |
-          TAG="${GITHUB_REF#refs/tags/v}"
-          CODE=$(grep -E '^VERSION\s*=' configurator.py | head -1 | sed "s/.*VERSION[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/")
-          if [ "$TAG" != "$CODE" ]; then
-            echo "❌ Tag v$TAG but configurator.py has VERSION=\"$CODE\""
-            exit 1
-          fi
-          echo "✔ Version matches: $CODE"
-
   build-windows:
-    needs: verify-version
-    if: always() && (needs.verify-version.result == 'success' || !startsWith(github.ref, 'refs/tags/v'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -36,6 +19,19 @@ jobs:
 
       - name: Install dependencies
         run: pip install PyQt6 pyinstaller==6.13.0 certifi
+
+      - name: Update version_info.txt from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          VER="${{ github.ref_name }}"
+          VER="${VER#v}"
+          MAJOR="${VER%%.*}"
+          MINOR="${VER##*.}"
+          sed -i "s/filevers=([^)]*)/filevers=($MAJOR, $MINOR, 0, 0)/" version_info.txt
+          sed -i "s/prodvers=([^)]*)/prodvers=($MAJOR, $MINOR, 0, 0)/" version_info.txt
+          sed -i "s/u'FileVersion', u'[^']*'/u'FileVersion', u'$VER.0.0'/" version_info.txt
+          sed -i "s/u'ProductVersion', u'[^']*'/u'ProductVersion', u'$VER.0.0'/" version_info.txt
 
       - name: Build executable
         run: >
@@ -53,8 +49,6 @@ jobs:
           path: dist/SwornTweaks.exe
 
   build-linux:
-    needs: verify-version
-    if: always() && (needs.verify-version.result == 'success' || !startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
