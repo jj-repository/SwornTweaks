@@ -46,7 +46,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.13"
+VERSION = "1.14"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -1433,6 +1433,30 @@ class UpdateChecker(QThread):
             self.check_failed.emit(str(e))
 
 
+def _cleanup_stale_old_files(*dirs: Path) -> None:
+    """Remove leftover .old<timestamp> files from prior self-updates.
+
+    Inline post-update cleanup can't delete the *currently running* exe on
+    Windows (file lock), so we sweep at startup when the previous binary
+    is no longer in use.
+    """
+    patterns = ("SwornTweaks.old[0-9]*", "configurator.old[0-9]*")
+    for d in dirs:
+        if d is None:
+            continue
+        try:
+            if not d.is_dir():
+                continue
+        except OSError:
+            continue
+        for pattern in patterns:
+            for stale in d.glob(pattern):
+                try:
+                    stale.unlink()
+                except OSError:
+                    pass  # still locked — try again next launch
+
+
 class Configurator(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1448,6 +1472,14 @@ class Configurator(QMainWindow):
             self.game_path = self._ask_game_path()
         if self.game_path:
             save_game_path(self.game_path)
+
+        # Sweep leftover .old files from previous self-updates
+        exe_dir = (
+            Path(sys.executable).parent
+            if IS_FROZEN
+            else Path(sys.argv[0]).resolve().parent
+        )
+        _cleanup_stale_old_files(exe_dir, self.mods_path)
 
         central = QWidget()
         outer = QVBoxLayout(central)
