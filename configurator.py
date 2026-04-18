@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QGroupBox,
@@ -36,6 +37,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -44,7 +46,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.12"
+VERSION = "1.13"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -1295,6 +1297,7 @@ class DownloadWorker(QThread):
 
     download_finished = pyqtSignal(str)
     download_error = pyqtSignal(str)
+    progress = pyqtSignal(str, int)  # label, percent (0-100)
 
     def __init__(
         self,
@@ -1320,10 +1323,25 @@ class DownloadWorker(QThread):
             req = urllib.request.Request(
                 self.url, headers={"User-Agent": "SwornTweaks"}
             )
+            label = self.asset_name or self.dest.name
+            self.progress.emit(label, 0)
             with urllib.request.urlopen(req, timeout=30, context=_ssl_ctx) as resp:
-                data = resp.read(_MAX_DOWNLOAD_BYTES + 1)
-                if len(data) > _MAX_DOWNLOAD_BYTES:
-                    raise RuntimeError("Download exceeds 50 MB safety limit")
+                total = int(resp.headers.get("Content-Length", 0) or 0)
+                chunks: list[bytes] = []
+                received = 0
+                while True:
+                    chunk = resp.read(64 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    received += len(chunk)
+                    if received > _MAX_DOWNLOAD_BYTES:
+                        raise RuntimeError("Download exceeds 50 MB safety limit")
+                    if total > 0:
+                        pct = min(100, int(received / total * 100))
+                        self.progress.emit(label, pct)
+                data = b"".join(chunks)
+            self.progress.emit(label, 100)
             if self.verify_ref and self.verify_filename:
                 _verify_file_against_github(
                     self.verify_ref,
@@ -2750,6 +2768,51 @@ class Configurator(QMainWindow):
 
     # ── Update logic ──────────────────────────────────────────────
 
+    def _open_progress_dialog(self):
+        """Show a modal popup with a progress bar for active downloads."""
+        self._progress_state = {}  # asset_name -> percent
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Downloading Update")
+        dlg.setFixedSize(380, 110)
+        dlg.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
+        dlg.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        dlg.setModal(True)
+        layout = QVBoxLayout(dlg)
+        lbl = QLabel("Starting download…")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl)
+        bar = QProgressBar()
+        bar.setRange(0, 100)
+        bar.setValue(0)
+        layout.addWidget(bar)
+        self._progress_dialog = dlg
+        self._progress_label = lbl
+        self._progress_bar = bar
+        dlg.show()
+
+    def _on_download_progress(self, asset_name: str, pct: int):
+        if not getattr(self, "_progress_dialog", None):
+            return
+        self._progress_state[asset_name] = pct
+        items = sorted(self._progress_state.items())
+        avg = sum(p for _, p in items) // max(1, len(items))
+        self._progress_bar.setValue(avg)
+        if len(items) == 1:
+            name, p = items[0]
+            self._progress_label.setText(f"Downloading {name}… {p}%")
+        else:
+            lines = ", ".join(f"{n}: {p}%" for n, p in items)
+            self._progress_label.setText(f"Downloading {len(items)} files — {lines}")
+
+    def _close_progress_dialog(self):
+        dlg = getattr(self, "_progress_dialog", None)
+        if dlg is not None:
+            dlg.close()
+        self._progress_dialog = None
+        self._progress_label = None
+        self._progress_bar = None
+        self._progress_state = {}
+
     def _check_and_update(self):
         """Manual update button: check version first, then download if newer."""
         if self._workers:
@@ -2832,6 +2895,8 @@ class Configurator(QMainWindow):
             else:
                 self._update_results["cfg"] = None
 
+        self._open_progress_dialog()
+
         # Download DLL
         dll_worker = DownloadWorker(
             GITHUB_DLL,
@@ -2845,6 +2910,7 @@ class Configurator(QMainWindow):
         dll_worker.download_error.connect(
             lambda e: self._on_download_fail("dll", "DLL", e)
         )
+        dll_worker.progress.connect(self._on_download_progress)
         self._workers.append(dll_worker)
         dll_worker.start()
 
@@ -2864,6 +2930,7 @@ class Configurator(QMainWindow):
                 exe_worker.download_error.connect(
                     lambda e: self._on_download_fail("exe", "Configurator", e)
                 )
+                exe_worker.progress.connect(self._on_download_progress)
                 self._workers.append(exe_worker)
                 exe_worker.start()
             else:
@@ -2883,10 +2950,9 @@ class Configurator(QMainWindow):
                 cfg_worker.download_error.connect(
                     lambda e: self._on_download_fail("cfg", "Configurator", e)
                 )
+                cfg_worker.progress.connect(self._on_download_progress)
                 self._workers.append(cfg_worker)
                 cfg_worker.start()
-
-        self.statusBar().showMessage("Downloading update...", 0)
 
     def _on_download_done(self, key: str, path: str):
         self._update_results[key] = path
@@ -2894,6 +2960,7 @@ class Configurator(QMainWindow):
 
     def _on_download_fail(self, key: str, what: str, err: str):
         self._update_results[key] = False
+        self._close_progress_dialog()
         QMessageBox.critical(
             self, "Update Failed", f"Failed to download {what}:\n{err}"
         )
@@ -2904,6 +2971,7 @@ class Configurator(QMainWindow):
         if any(v is None for v in self._update_results.values()):
             return  # still waiting
         self._workers.clear()
+        self._close_progress_dialog()
 
         if not all(v and v is not False for v in self._update_results.values()):
             self.statusBar().showMessage("Update finished with errors", 5000)
