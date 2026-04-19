@@ -118,3 +118,13 @@ jobs:
             --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepend download disclaimer to release notes
+        run: |
+          TAG="${{ github.ref_name }}"
+          DISCLAIMER=$'## 📥 Downloads\n\n**For the configurator app:**\n- **Windows** → `SwornTweaks.exe`\n- **Linux** → `SwornTweaks-Linux`\n\n**For the game mod (always required):**\n- `SwornTweaks.dll` — drop into your MelonLoader `Mods/` folder\n\nThe `SHA256SUMS` file is an optional checksum for verifying the download — you don\'t need it to use the mod.\n\n---\n\n'
+          BODY=$(gh release view "$TAG" --json body -q .body)
+          printf '%s%s' "$DISCLAIMER" "$BODY" > /tmp/release_notes.md
+          gh release edit "$TAG" --notes-file /tmp/release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
