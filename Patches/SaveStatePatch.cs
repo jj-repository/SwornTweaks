@@ -331,6 +331,14 @@ namespace SwornTweaks.Patches
                 var bm = UnityEngine.Object.FindObjectOfType<BlessingManager>();
                 var cm = UnityEngine.Object.FindObjectOfType<CurrencyManager>();
 
+                // Read game's own BiomeRoomIndex — authoritative source.
+                // Our SaveStateTracker.BiomeRoomsCompleted counter drifts because
+                // ConsumePath fires for some transitions that don't advance the
+                // game's counter.
+                int gameBiomeRoomIndex;
+                try { gameBiomeRoomIndex = Traverse.Create(em).Property("BiomeRoomIndex").GetValue<int>(); }
+                catch { gameBiomeRoomIndex = SaveStateTracker.BiomeRoomsCompleted; }
+
                 var save = new SaveData
                 {
                     Timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
@@ -338,7 +346,7 @@ namespace SwornTweaks.Patches
                     {
                         BiomeIndex = em.BiomeIndex,
                         RoomIndex = em.RoomIndex,
-                        BiomeRoomIndex = SaveStateTracker.BiomeRoomsCompleted,
+                        BiomeRoomIndex = gameBiomeRoomIndex,
                         HasKilledArthur = em.HasKilledArthurThisRun,
                         HasKilledMorgana = em.HasKilledMorganaThisRun,
                     },
@@ -409,7 +417,7 @@ namespace SwornTweaks.Patches
                 Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
                 File.WriteAllText(savePath, json);
 
-                MelonLogger.Msg($"[SwornTweaks] [Save] Run state saved — biome={save.Expedition.BiomeIndex} room={save.Expedition.RoomIndex} biomeRoom={save.Expedition.BiomeRoomIndex} paths={save.RoomHistory.Count}");
+                MelonLogger.Msg($"[SwornTweaks] [Save] Run state saved — biome={save.Expedition.BiomeIndex} room={save.Expedition.RoomIndex} biomeRoom={save.Expedition.BiomeRoomIndex} counter={SaveStateTracker.BiomeRoomsCompleted} paths={save.RoomHistory.Count}");
             }
             catch (Exception ex)
             {
