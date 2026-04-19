@@ -46,7 +46,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-VERSION = "1.14"
+VERSION = "1.15"
 _MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap for downloads
 GITHUB_REPO = "jj-repository/SwornTweaks"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
@@ -1552,7 +1552,7 @@ class Configurator(QMainWindow):
         )
 
         self._save_state_group = self._group(
-            "Multiplayer Save / Resume",
+            "Multiplayer Save / Resume (WIP - doesn't work)",
             [
                 self._bool_row("AutoSaveEnabled", "Auto-Save After Each Room"),
                 self._label_row(
@@ -1856,7 +1856,7 @@ class Configurator(QMainWindow):
             )
         )
         self._boss_rush_group = self._group(
-            "Boss Rush Mode",
+            "Boss Rush Mode (Unbalanced - easy)",
             [rush_top, self._rush_details],
             "Fight all bosses and beasts back-to-back.\n"
             "Disables most other settings when active.\n"
@@ -1995,8 +1995,8 @@ class Configurator(QMainWindow):
         tako_pix = QPixmap()
         tako_pix.loadFromData(tako_data)
         tako_pix = tako_pix.scaled(
-            200,
-            200,
+            120,
+            120,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
